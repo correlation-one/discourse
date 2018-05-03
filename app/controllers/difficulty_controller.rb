@@ -7,5 +7,5 @@ class DifficultyController < ApplicationController
        topic.custom_fields["difficulty"] = params[:difficulty].to_i
        topic.save_custom_fields(true)
 
-       #render json (??)
+       render json: success_json
     end
