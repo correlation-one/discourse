@@ -9,3 +9,4 @@ class DifficultyController < ApplicationController
 
        render json: success_json
     end
+end
