@@ -63,6 +63,13 @@
                     {{popup-input-tip validation=categoryValidation}}
                   </div>
                 {{/if}}
+                  <select>
+                    <option value="Beginner">Beginner</option>
+                    <option value="Easy">Easy</option>
+                    <option value="Medium">Medium</option>
+                    <option value="Hard">Hard</option>
+                    <option value="Legendary">Legendary</option>
+                  </select>
                 {{#if canEditTags}}
                   {{mini-tag-chooser tags=model.tags tabindex="4" categoryId=model.categoryId minimum=model.minimumRequiredTags}}
                   {{popup-input-tip validation=tagValidation}}
