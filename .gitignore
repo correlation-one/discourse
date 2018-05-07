@@ -54,6 +54,7 @@ bootsnap-compile-cache/
 !/plugins/discourse-narrative-bot
 !/plugins/discourse-presenc
 !/plugins/discourse-ratings/
+!/plugins/discourse-math/
 /plugins/*/auto_generated/
 
 

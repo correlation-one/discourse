@@ -72,4 +72,9 @@
 
 {{raw "list/activity-column" topic=topic class="num" tagName="td"}}
 
-<td class="num difficulty">{{number topic.average_rating numberKey="difficulty_int"}}</td>
+       <div class="topic-rating">
+         <a href='{{context.topic.url}}'>
+           {{star-rating-raw topic.average_rating clickable='true'}}          
+
+        </a>
+       </div>
