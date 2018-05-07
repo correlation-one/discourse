@@ -63,8 +63,10 @@ module RatingsHelper
     ##end
 
     ## This should be replaced with a :rated? property in TopicUser - but how to do this in a plugin?
+
+    ## This determines whether or not a topic has been given a rating
     def has_rated?(topic, user_id)
-      @user_posts = topic.posts.select { |post| post.user_id === user_id }
+      @user_posts = topic.posts.select { |post| true }
       PostCustomField.exists?(post_id: @user_posts.map(&:id), name: "rating")
     end
   end
