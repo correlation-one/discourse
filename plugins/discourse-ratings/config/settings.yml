@@ -1,7 +1,7 @@
 plugins:
   rating_show_topic_tip:
-    default: true
-    client: true
+    default: false
+    client: false
   rating_show_exact_average:
     default: false
     client: false
