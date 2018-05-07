@@ -12,11 +12,8 @@ en:
       rating_count: "Difficulty"
       tip:
         ratings:
-          title: "Difficulty Topic"
-          details: "Users can rate the subject of the topic.
-                    <ul><li>Each user is allowed one rating.</li>
-                    <li>Each rating must be attached to a post.</li>
-                    <li>Users can post without rating.</li></ul>"
+          title: "Difficulty"
+          details: "Stars correspond to the difficulty of the question, with 1 star being easiest."
     filters:
       ratings:
         title: "Ratings"
