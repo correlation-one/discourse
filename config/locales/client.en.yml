@@ -2397,6 +2397,7 @@ en:
       one: "this topic has been viewed 1 time"
       other: "this topic has been viewed {{number}} times"
     activity: "Activity"
+    difficulty: "Difficulty"
     likes: "Likes"
     likes_lowercase:
       one: "like"
