@@ -64,15 +64,7 @@
                   </div>
                 {{/if}}
 
-                <div class="difficulty-input">
-                  <select>
-                    <option value="1">Beginner</option>
-                    <option value="2">Easy</option>
-                    <option value="3">Medium</option>
-                    <option value="4">Hard</option>
-                    <option value="5">Legendary</option>
-                  </select>
-                </div>
+
                   
                 {{#if canEditTags}}
                   {{mini-tag-chooser tags=model.tags tabindex="4" categoryId=model.categoryId minimum=model.minimumRequiredTags}}
