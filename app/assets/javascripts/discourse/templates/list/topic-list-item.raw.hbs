@@ -71,10 +71,8 @@
 <td class="num views {{topic.viewsHeat}}">{{number topic.views numberKey="views_long"}}</td>
 
 {{raw "list/activity-column" topic=topic class="num" tagName="td"}}
-
-       <div class="topic-rating">
-         <a href='{{context.topic.url}}'>
-           {{star-rating-raw topic.average_rating clickable='true'}}          
-
-        </a>
-       </div>
+<td class= "num diff">
+  <div class="topic-rating">
+    {{star-rating-raw topic.average_rating clickable='false'}}          
+  </div>
+</td>
