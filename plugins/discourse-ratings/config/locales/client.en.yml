@@ -1,22 +1,19 @@
 en:
   js:
     category:
-      enable_rating: "Use topics in this category to rate things."
+      enable_rating: "Allow topics in this category to have difficulty assigned."
     composer:
-      your_rating: "Add a rating"
-      select_rating: "Please select a rating, or uncheck 'Add a rating'."
-      rating_target_id: "Rating target id"
+      your_rating: "Set difficulty"
+      select_rating: "Please select a difficulty, or uncheck 'Set difficulty'."
+      rating_target_id: "Difficulty target id"
     topic:
-      hidden_ratings: "Topic has hidden ratings"
-      no_ratings: "No ratings yet"
-      rating_count: "Ratings"
+      hidden_ratings: "Topic has hidden difficulty"
+      no_ratings: "No difficulty"
+      rating_count: "Difficulty"
       tip:
         ratings:
-          title: "Rating Topic"
-          details: "Users can rate the subject of the topic.
-                    <ul><li>Each user is allowed one rating.</li>
-                    <li>Each rating must be attached to a post.</li>
-                    <li>Users can post without rating.</li></ul>"
+          title: "Difficulty"
+          details: "Stars correspond to the difficulty of the question, with 1 star being easiest."
     filters:
       ratings:
         title: "Ratings"
