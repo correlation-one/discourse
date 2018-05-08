@@ -66,12 +66,12 @@ RUN mkdir /jemalloc-new && cd /jemalloc-new &&\
 RUN echo 'gem: --no-document' >> /usr/local/etc/gemrc &&\
     mkdir /src && cd /src && git clone https://github.com/sstephenson/ruby-build.git &&\
     cd /src/ruby-build && ./install.sh &&\
-    cd / && rm -rf /src/ruby-build && (ruby-build 2.4.4 /usr/local)
+    cd / && rm -rf /src/ruby-build && (ruby-build 2.3.4 /usr/local)
 
 RUN gem update --system
 
 RUN gem install bundler --force &&\
-    rm -rf /usr/local/share/ri/2.4.4/system &&\
+    rm -rf /usr/local/share/ri/2.3.4/system &&\
     cd / && git clone https://github.com/SamSaffron/pups.git
 
 ADD install-imagemagick /tmp/install-imagemagick
@@ -122,14 +122,15 @@ ADD cron.d_anacron /etc/cron.d/anacron
 
 
 # Discourse specific bits
-RUN useradd question-writer-forum -s /bin/bash -m -U &&\
+RUN useradd discourse -s /bin/bash -m -U &&\
     mkdir -p /var/www &&\
     cd /var/www &&\
     git clone https://github.com/AvikHasija/question-writer-forum.git &&\
-    cd question-writer-forum &&\
+    cd discourse &&\
     git remote set-branches --add origin tests-passed &&\
-    chown -R question-writer-forum:question-writer-forum /var/www/question-writer-forum &&\
-    cd /var/www/question-writer-forum &&\
-    sudo -u question-writer-forum bundle install --deployment \
+    chown -R discourse:discourse /var/www/discourse &&\
+    cd /var/www/discourse &&\
+    sudo -u discourse bundle install --deployment \
          --without test --without development &&\
-    find /var/www/question-writer-forum/vendor/bundle -name tmp -type d -exec rm -rf {} +
+    find /var/www/discourse/vendor/bundle -name tmp -type d -exec rm -rf {} +
+   
