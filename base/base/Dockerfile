@@ -125,7 +125,7 @@ ADD cron.d_anacron /etc/cron.d/anacron
 RUN useradd discourse -s /bin/bash -m -U &&\
     mkdir -p /var/www &&\
     cd /var/www &&\
-    git clone https://github.com/AvikHasija/question-writer-forum.git &&\
+    git clone https://github.com/AvikHasija/discourse.git &&\
     cd discourse &&\
     git remote set-branches --add origin tests-passed &&\
     chown -R discourse:discourse /var/www/discourse &&\
