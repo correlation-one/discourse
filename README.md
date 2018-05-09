@@ -9,7 +9,7 @@ Steps:
   `image/discourse_dev/Dockerfile`
   `image/auto_build.rb`
   `launcher`
- 4. Now, follow the instructions outlined in `discourse/docs/INSTALL-cloud.md` (this repository). Please note that the official discourse github links should be substituted with correlation one repositories.
+ 4. Now, follow the instructions outlined in `discourse/docs/INSTALL-cloud.md` (this repository). Please note that the official discourse github links should be substituted with correlation one repositories. Also note that Google Cloud Platform doesn't allow SMTP traffic through ports 25, 465, or 587. A different port, such as 2525, must be used during setup.
 
 <a href="http://www.discourse.org/">![Logo](images/discourse.png)</a>
 
