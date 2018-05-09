@@ -1,4 +1,4 @@
-## Instructions 
+## Instructions to deploy custom Discourse application to cloud (C1)
 
 To deploy changes to this codebase, we need to rebuild the Docker image. Currently, the custom image is on Docker Hub at avikhasija/discourse. This can be changed to a new repository on Docker Hub, however, all references to it in the discourse-docker repository must be updated.
 
