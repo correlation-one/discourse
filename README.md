@@ -1,3 +1,16 @@
+## Instructions 
+
+To deploy changes to this codebase, we need to rebuild the Docker image. Currently, the custom image is on Docker Hub at avikhasija/discourse. This can be changed to a new repository on Docker Hub, however, all references to it in the discourse-docker repository must be updated.
+
+Steps:
+1. In the root of the Discourse project folder, run `docker build --tag "discourse" base/base/`
+2. Push this image to Docker Hub
+3. Change references to the image in the discourse-docker project. The following files should be changed:
+  `image/discourse_dev/Dockerfile`
+  `image/auto_build.rb`
+  `launcher`
+ 4. Now, follow the instructions outlined in `discourse/docs/INSTALL-cloud.md` (this repository). Please note that the official discourse github links should be substituted with correlation one repositories.
+
 <a href="http://www.discourse.org/">![Logo](images/discourse.png)</a>
 
 Discourse is the 100% open source discussion platform built for the next decade of the Internet. Use it as a:
