@@ -3,7 +3,7 @@
   position: absolute;
   top: 0;
   z-index: z("header");
-  background-color: $header_background;
+  background-color: #2d353c;
   box-shadow: shadow("header");
 
   .docked & {
