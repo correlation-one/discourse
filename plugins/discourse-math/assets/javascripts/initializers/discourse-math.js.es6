@@ -68,7 +68,6 @@ function decorate(elem, isPreview) {
     () => {
       window.MathJax.Hub.Queue(() => {
         // don't bother processing previews removed from DOM unless within a details tag
-        console.log("Here1");
         if (elem.parentElement && ((elem.parentElement.offsetParent !== null) || (elem.parentElement.parentElement && elem.parentElement.parentElement.tagName === 'DETAILS'))) {
           window.MathJax.Hub.Typeset($math[0], () => {
             console.log("Here");
