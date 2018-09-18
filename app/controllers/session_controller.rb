@@ -1,5 +1,6 @@
 require_dependency 'rate_limiter'
 require_dependency 'single_sign_on'
+require_dependency 'url_helper'
 
 class SessionController < ApplicationController
   class LocalLoginNotAllowed < StandardError; end
@@ -43,8 +44,15 @@ class SessionController < ApplicationController
 
   def sso_provider(payload = nil)
     payload ||= request.query_string
+
     if SiteSetting.enable_sso_provider
       sso = SingleSignOn.parse(payload, SiteSetting.sso_secret)
+
+      if sso.return_sso_url.blank?
+        render plain: "return_sso_url is blank, it must be provided", status: 400
+        return
+      end
+
       if current_user
         sso.name = current_user.name
         sso.username = current_user.username
@@ -54,9 +62,18 @@ class SessionController < ApplicationController
         sso.moderator = current_user.moderator?
         sso.groups = current_user.groups.pluck(:name).join(",")
 
-        if sso.return_sso_url.blank?
-          render plain: "return_sso_url is blank, it must be provided", status: 400
-          return
+        if current_user.uploaded_avatar.present?
+          base_url = Discourse.store.external? ? "#{Discourse.store.absolute_base_url}/" : Discourse.base_url
+          avatar_url = "#{base_url}#{Discourse.store.get_path_for_upload(current_user.uploaded_avatar)}"
+          sso.avatar_url = UrlHelper.absolute Discourse.store.cdn_url(avatar_url)
+        end
+
+        if current_user.user_profile.profile_background.present?
+          sso.profile_background_url = UrlHelper.absolute upload_cdn_path(current_user.user_profile.profile_background)
+        end
+
+        if current_user.user_profile.card_background.present?
+          sso.card_background_url = UrlHelper.absolute upload_cdn_path(current_user.user_profile.card_background)
         end
 
         if request.xhr?
@@ -65,7 +82,7 @@ class SessionController < ApplicationController
           redirect_to sso.to_url(sso.return_sso_url)
         end
       else
-        session[:sso_payload] = request.query_string
+        cookies[:sso_payload] = request.query_string
         redirect_to path('/login')
       end
     else
@@ -229,10 +246,11 @@ class SessionController < ApplicationController
     if payload = login_error_check(user)
       render json: payload
     else
-      if user.totp_enabled? && !user.authenticate_totp(params[:second_factor_token])
+      if user.totp_enabled? && !user.authenticate_second_factor(params[:second_factor_token], params[:second_factor_method].to_i)
         return render json: failed_json.merge(
           error: I18n.t("login.invalid_second_factor_code"),
-          reason: "invalid_second_factor"
+          reason: "invalid_second_factor",
+          backup_enabled: user.backup_codes_enabled?
         )
       end
 
@@ -243,17 +261,18 @@ class SessionController < ApplicationController
   def email_login
     raise Discourse::NotFound if !SiteSetting.enable_local_logins_via_email
     second_factor_token = params[:second_factor_token]
+    second_factor_method = params[:second_factor_method].to_i
     token = params[:token]
     valid_token = !!EmailToken.valid_token_format?(token)
     user = EmailToken.confirmable(token)&.user
 
     if valid_token && user&.totp_enabled?
-      RateLimiter.new(nil, "second-factor-min-#{request.remote_ip}", 3, 1.minute).performed!
-
       if !second_factor_token.present?
         @second_factor_required = true
+        @backup_codes_enabled = true if user&.backup_codes_enabled?
         return render layout: 'no_ember'
-      elsif !user.authenticate_totp(second_factor_token)
+      elsif !user.authenticate_second_factor(second_factor_token, second_factor_method)
+        RateLimiter.new(nil, "second-factor-min-#{request.remote_ip}", 3, 1.minute).performed!
         @error = I18n.t('login.invalid_second_factor_code')
         return render layout: 'no_ember'
       end
@@ -388,7 +407,7 @@ class SessionController < ApplicationController
     session.delete(ACTIVATE_USER_KEY)
     log_on_user(user)
 
-    if payload = session.delete(:sso_payload)
+    if payload = cookies.delete(:sso_payload)
       sso_provider(payload)
     else
       render_serialized(user, UserSerializer)

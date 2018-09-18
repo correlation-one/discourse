@@ -72,7 +72,7 @@ class UploadsController < ApplicationController
           content_type: MiniMime.lookup_by_filename(upload.original_filename)&.content_type,
         }
         opts[:disposition]   = "inline" if params[:inline]
-        opts[:disposition] ||= "attachment" unless FileHelper.is_image?(upload.original_filename)
+        opts[:disposition] ||= "attachment" unless FileHelper.is_supported_image?(upload.original_filename)
         send_file(Discourse.store.path_for(upload), opts)
       else
         render_404
@@ -107,14 +107,12 @@ class UploadsController < ApplicationController
     else
       tempfile = file.tempfile
       filename = file.original_filename
-      content_type = file.content_type
     end
 
     return { errors: [I18n.t("upload.file_missing")] } if tempfile.nil?
 
     opts = {
       type: type,
-      content_type: content_type,
       for_private_message: for_private_message,
       pasted: pasted,
     }

@@ -289,69 +289,6 @@ describe UserMerger do
       expect(Notification.where(user_id: target_user.id).count).to eq(2)
       expect(Notification.where(user_id: source_user.id).count).to eq(0)
     end
-
-    def create_notification(type, notified_user, post, data = {})
-      Fabricate(
-        :notification,
-        notification_type: Notification.types[type],
-        user: notified_user,
-        data: data.to_json,
-        topic: post&.topic,
-        post_number: post&.post_number
-      )
-    end
-
-    def notification_data(notification)
-      JSON.parse(notification.reload.data, symbolize_names: true)
-    end
-
-    def original_and_display_username(user)
-      { original_username: user.username, display_username: user.username, foo: "bar" }
-    end
-
-    def original_username_and_some_text_as_display_username(user)
-      { original_username: user.username, display_username: "some text", foo: "bar" }
-    end
-
-    def only_display_username(user)
-      { display_username: user.username }
-    end
-
-    def username_and_something_else(user)
-      { username: user.username, foo: "bar" }
-    end
-
-    it "updates notification data" do
-      notified_user = Fabricate(:user)
-      p1 = Fabricate(:post, post_number: 1, user: source_user)
-      p2 = Fabricate(:post, post_number: 1, user: walter)
-      Fabricate(:invite, invited_by: notified_user, user: source_user)
-      Fabricate(:invite, invited_by: notified_user, user: walter)
-
-      n01 = create_notification(:mentioned, notified_user, p1, original_and_display_username(source_user))
-      n02 = create_notification(:mentioned, notified_user, p2, original_and_display_username(walter))
-      n03 = create_notification(:mentioned, notified_user, p1, original_username_and_some_text_as_display_username(source_user))
-      n04 = create_notification(:mentioned, notified_user, p1, only_display_username(source_user))
-      n05 = create_notification(:invitee_accepted, notified_user, nil, only_display_username(source_user))
-      n06 = create_notification(:invitee_accepted, notified_user, nil, only_display_username(walter))
-      n07 = create_notification(:granted_badge, source_user, nil, username_and_something_else(source_user))
-      n08 = create_notification(:granted_badge, walter, nil, username_and_something_else(walter))
-      n09 = create_notification(:group_message_summary, source_user, nil, username_and_something_else(source_user))
-      n10 = create_notification(:group_message_summary, walter, nil, username_and_something_else(walter))
-
-      merge_users!
-
-      expect(notification_data(n01)).to eq(original_and_display_username(target_user))
-      expect(notification_data(n02)).to eq(original_and_display_username(walter))
-      expect(notification_data(n03)).to eq(original_username_and_some_text_as_display_username(target_user))
-      expect(notification_data(n04)).to eq(only_display_username(target_user))
-      expect(notification_data(n05)).to eq(only_display_username(target_user))
-      expect(notification_data(n06)).to eq(only_display_username(walter))
-      expect(notification_data(n07)).to eq(username_and_something_else(target_user))
-      expect(notification_data(n08)).to eq(username_and_something_else(walter))
-      expect(notification_data(n09)).to eq(username_and_something_else(target_user))
-      expect(notification_data(n10)).to eq(username_and_something_else(walter))
-    end
   end
 
   context "post actions" do
@@ -541,7 +478,7 @@ describe UserMerger do
   end
 
   it "updates themes" do
-    theme = Theme.create!(name: 'my name', user_id: source_user.id)
+    theme = Fabricate(:theme, user: source_user)
     merge_users!
 
     expect(theme.reload.user_id).to eq(target_user.id)
@@ -913,6 +850,7 @@ describe UserMerger do
     UserHistory.create(action: UserHistory.actions[:anonymize_user], target_user_id: walter.id, acting_user_id: source_user.id)
 
     merge_users!
+    UserHistory.where(action: UserHistory.actions[:merge_user], target_user_id: target_user.id).delete_all
 
     expect(UserHistory.where(target_user_id: target_user.id).count).to eq(1)
     expect(UserHistory.where(target_user_id: source_user.id).count).to eq(0)
@@ -940,6 +878,8 @@ describe UserMerger do
   end
 
   it "merges user visits" do
+    freeze_time DateTime.parse('2010-01-01 12:00')
+
     UserVisit.create!(user_id: source_user.id, visited_at: 2.days.ago, posts_read: 22, mobile: false, time_read: 400)
     UserVisit.create!(user_id: source_user.id, visited_at: Date.yesterday, posts_read: 8, mobile: false, time_read: 100)
     UserVisit.create!(user_id: target_user.id, visited_at: Date.yesterday, posts_read: 12, mobile: true, time_read: 270)
@@ -1014,6 +954,15 @@ describe UserMerger do
     expect(User.find_by_username(source_user.username)).to be_nil
   end
 
+  it "deletes the source user even when it is a member of a group that grants a trust level" do
+    group = Fabricate(:group, grant_trust_level: 3)
+    group.bulk_add([source_user.id, target_user.id])
+
+    merge_users!
+
+    expect(User.find_by_username(source_user.username)).to be_nil
+  end
+
   it "deletes external auth infos of source user" do
     FacebookUserInfo.create(user_id: source_user.id, facebook_user_id: "example")
     GithubUserInfo.create(user_id: source_user.id, screen_name: "example", github_user_id: "examplel123123")
@@ -1039,7 +988,7 @@ describe UserMerger do
   it "deletes auth tokens" do
     Fabricate(:api_key, user: source_user)
     Fabricate(:readonly_user_api_key, user: source_user)
-    Fabricate(:user_second_factor, user: source_user)
+    Fabricate(:user_second_factor_totp, user: source_user)
 
     SiteSetting.verbose_auth_token_logging = true
     UserAuthToken.generate!(user_id: source_user.id, user_agent: "Firefox", client_ip: "127.0.0.1")
@@ -1067,5 +1016,28 @@ describe UserMerger do
     expect(UserAvatar.where(user_id: source_user.id).count).to eq(0)
 
     expect(User.find_by_username(source_user.username)).to be_nil
+  end
+
+  it "updates the username" do
+    Jobs::UpdateUsername.any_instance
+      .expects(:execute)
+      .with(user_id: source_user.id,
+            old_username: 'alice1',
+            new_username: 'alice',
+            avatar_template: target_user.avatar_template)
+      .once
+
+    merge_users!
+  end
+
+  it "correctly logs the merge" do
+    expect { merge_users! }.to change { UserHistory.count }.by(1)
+
+    log_entry = UserHistory.last
+    expect(log_entry.action).to eq(UserHistory.actions[:merge_user])
+    expect(log_entry.acting_user_id).to eq(Discourse::SYSTEM_USER_ID)
+    expect(log_entry.target_user_id).to eq(target_user.id)
+    expect(log_entry.context).to eq(I18n.t("staff_action_logs.user_merged", username: source_user.username))
+    expect(log_entry.email).to eq("alice@work.com")
   end
 end

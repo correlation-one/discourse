@@ -2,6 +2,7 @@
 class TwitterApi
 
   class << self
+    include ActionView::Helpers::NumberHelper
 
     def prettify_tweet(tweet)
       text = tweet["full_text"].dup
@@ -23,13 +24,17 @@ class TwitterApi
             end
           elsif m['type'] == 'video'
             if large = m['sizes']['large']
-              result << "<div class='tweet-images'><iframe class='tweet-video' src='https://twitter.com/i/videos/#{tweet['id_str']}' width='#{large['w']}' height='#{large['h']}' frameborder='0'></iframe></div>"
+              result << "<div class='tweet-images'><iframe class='tweet-video' src='https://twitter.com/i/videos/#{tweet['id_str']}' width='#{large['w']}' height='#{large['h']}' frameborder='0' allowfullscreen></iframe></div>"
             end
           end
         end
       end
 
       result
+    end
+
+    def prettify_number(count)
+      number_to_human(count, format: '%n%u', precision: 2, units: { thousand: 'K', million: 'M', billion: 'B' })
     end
 
     def user_timeline(screen_name)
@@ -54,27 +59,27 @@ class TwitterApi
 
     def link_handles_in(text)
       text.scan(/(?:^|\s)@(\w+)/).flatten.uniq.each do |handle|
-        text.gsub!("@#{handle}", [
-          "<a href='https://twitter.com/#{handle}' target='_blank'>",
+        text.gsub!(/(?:^|\s)@#{handle}/, [
+          " <a href='https://twitter.com/#{handle}' target='_blank'>",
             "@#{handle}",
           "</a>"
         ].join)
       end
 
-      text
+      text.strip
     end
 
     def link_hashtags_in(text)
       text.scan(/(?:^|\s)#(\w+)/).flatten.uniq.each do |hashtag|
-        text.gsub!("##{hashtag}", [
-          "<a href='https://twitter.com/search?q=%23#{hashtag}' ",
+        text.gsub!(/(?:^|\s)##{hashtag}/, [
+          " <a href='https://twitter.com/search?q=%23#{hashtag}' ",
           "target='_blank'>",
             "##{hashtag}",
           "</a>"
         ].join)
       end
 
-      text
+      text.strip
     end
 
     def user_timeline_uri_for(screen_name)

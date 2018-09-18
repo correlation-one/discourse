@@ -37,13 +37,15 @@ module UserNotificationsHelper
 
     result = ""
     length = 0
-    doc.css('body > p, aside.onebox, body > ul').each do |node|
+
+    doc.css('body > p, aside.onebox, body > ul, body > blockquote').each do |node|
       if node.text.present?
         result << node.to_s
         length += node.inner_text.length
         return result if length >= SiteSetting.digest_min_excerpt_length
       end
     end
+
     return result unless result.blank?
 
     # If there is no first paragaph, return the first div (onebox)
@@ -104,7 +106,7 @@ module UserNotificationsHelper
 
   def url_for_email(href)
     URI(href).host.present? ? href : UrlHelper.absolute("#{Discourse.base_uri}#{href}")
-  rescue URI::InvalidURIError, URI::InvalidComponentError
+  rescue URI::Error
     href
   end
 

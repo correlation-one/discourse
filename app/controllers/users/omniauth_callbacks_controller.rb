@@ -5,22 +5,9 @@ require_dependency 'user_name_suggester'
 
 class Users::OmniauthCallbacksController < ApplicationController
 
-  BUILTIN_AUTH = [
-    Auth::FacebookAuthenticator.new,
-    Auth::GoogleOAuth2Authenticator.new,
-    Auth::OpenIdAuthenticator.new("yahoo", "https://me.yahoo.com", trusted: true),
-    Auth::GithubAuthenticator.new,
-    Auth::TwitterAuthenticator.new,
-    Auth::InstagramAuthenticator.new
-  ]
-
   skip_before_action :redirect_to_login_if_required
 
   layout 'no_ember'
-
-  def self.types
-    @types ||= Enum.new(:facebook, :instagram, :twitter, :google, :yahoo, :github, :persona, :cas)
-  end
 
   # need to be able to call this
   skip_before_action :check_xhr
@@ -36,9 +23,13 @@ class Users::OmniauthCallbacksController < ApplicationController
     auth[:session] = session
 
     authenticator = self.class.find_authenticator(params[:provider])
-    provider = Discourse.auth_providers && Discourse.auth_providers.find { |p| p.name == params[:provider] }
+    provider = DiscoursePluginRegistry.auth_providers.find { |p| p.name == params[:provider] }
 
-    @auth_result = authenticator.after_authenticate(auth)
+    if authenticator.can_connect_existing_user? && current_user
+      @auth_result = authenticator.after_authenticate(auth, existing_account: current_user)
+    else
+      @auth_result = authenticator.after_authenticate(auth)
+    end
 
     origin = request.env['omniauth.origin']
 
@@ -50,7 +41,7 @@ class Users::OmniauthCallbacksController < ApplicationController
     if origin.present?
       parsed = begin
         URI.parse(origin)
-      rescue URI::InvalidURIError
+      rescue URI::Error
       end
 
       if parsed
@@ -91,18 +82,10 @@ class Users::OmniauthCallbacksController < ApplicationController
   end
 
   def self.find_authenticator(name)
-    BUILTIN_AUTH.each do |authenticator|
-      if authenticator.name == name
-        raise Discourse::InvalidAccess.new("provider is not enabled") unless SiteSetting.send("enable_#{name}_logins?")
-        return authenticator
-      end
+    Discourse.enabled_authenticators.each do |authenticator|
+      return authenticator if authenticator.name == name
     end
-
-    Discourse.auth_providers.each do |provider|
-      return provider.authenticator if provider.name == name
-    end
-
-    raise Discourse::InvalidAccess.new("provider is not found")
+    raise Discourse::InvalidAccess.new(I18n.t('authenticator_not_found'))
   end
 
   protected
@@ -120,12 +103,14 @@ class Users::OmniauthCallbacksController < ApplicationController
   def user_found(user)
     if user.totp_enabled?
       @auth_result.omniauth_disallow_totp = true
+      @auth_result.email = user.email
       return
     end
 
     # automatically activate/unstage any account if a provider marked the email valid
     if @auth_result.email_valid && @auth_result.email == user.email
-      user.update!(staged: false)
+      user.unstage
+      user.save
 
       # ensure there is an active email token
       unless EmailToken.where(email: user.email, confirmed: true).exists? ||

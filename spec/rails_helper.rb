@@ -14,6 +14,31 @@ require 'mocha/api'
 require 'certified'
 require 'webmock/rspec'
 
+class RspecErrorTracker
+
+  def self.last_exception=(ex)
+    @ex = ex
+  end
+
+  def self.last_exception
+    @ex
+  end
+
+  def initialize(app, config = {})
+    @app = app
+  end
+
+  def call(env)
+    begin
+      @app.call(env)
+    rescue => e
+      RspecErrorTracker.last_exception = e
+      raise e
+    end
+  ensure
+  end
+end
+
 ENV["RAILS_ENV"] ||= 'test'
 require File.expand_path("../../config/environment", __FILE__)
 require 'rspec/rails'
@@ -96,6 +121,23 @@ RSpec.configure do |config|
     end
   end
 
+  config.after :each do |x|
+    if x.exception && ex = RspecErrorTracker.last_exception
+      # magic in a cause if we have none
+      unless x.exception.cause
+        class << x.exception
+          attr_accessor :cause
+        end
+        x.exception.cause = ex
+      end
+    end
+
+    unfreeze_time
+    ActionMailer::Base.deliveries.clear
+
+    raise if ActiveRecord::Base.connection_pool.stat[:busy] > 1
+  end
+
   config.before :each do |x|
     # TODO not sure about this, we could use a mock redis implementation here:
     #   this gives us really clean "flush" semantics, howere the side-effect is that
@@ -116,7 +158,6 @@ RSpec.configure do |config|
     SiteSetting.provider.all.each do |setting|
       SiteSetting.remove_override!(setting.name)
     end
-    SiteSetting.defaults.site_locale = SiteSettings::DefaultsProvider::DEFAULT_LOCALE
 
     # very expensive IO operations
     SiteSetting.automatically_download_gravatars = false
@@ -126,10 +167,23 @@ RSpec.configure do |config|
 
     I18n.locale = :en
 
+    RspecErrorTracker.last_exception = nil
+
     if $test_cleanup_callbacks
       $test_cleanup_callbacks.reverse_each(&:call)
       $test_cleanup_callbacks = nil
     end
+  end
+
+  config.before(:each, type: :multisite) do
+    RailsMultisite::ConnectionManagement.config_filename =
+      "spec/fixtures/multisite/two_dbs.yml"
+  end
+
+  config.after(:each, type: :multisite) do
+    RailsMultisite::ConnectionManagement.clear_settings!
+    ActiveRecord::Base.clear_active_connections!
+    ActiveRecord::Base.establish_connection
   end
 
   class TestCurrentUserProvider < Auth::DefaultCurrentUserProvider

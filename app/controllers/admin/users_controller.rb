@@ -46,10 +46,52 @@ class Admin::UsersController < Admin::AdminController
   end
 
   def delete_all_posts
-    @user = User.find_by(id: params[:user_id])
-    @user.delete_all_posts!(guardian)
-    # staff action logs will have an entry for each post
-    render body: nil
+    hijack do
+      user = User.find_by(id: params[:user_id])
+      user.delete_all_posts!(guardian)
+      # staff action logs will have an entry for each post
+      render body: nil
+    end
+  end
+
+  # DELETE action to delete penalty history for a user
+  def penalty_history
+
+    # We don't delete any history, we merely remove the action type
+    # with a removed type. It can still be viewed in the logs but
+    # will not affect TL3 promotions.
+    sql = <<~SQL
+      UPDATE user_histories
+      SET action = CASE
+        WHEN action = :silence_user THEN :removed_silence_user
+        WHEN action = :unsilence_user THEN :removed_unsilence_user
+        WHEN action = :suspend_user THEN :removed_suspend_user
+        WHEN action = :unsuspend_user THEN :removed_unsuspend_user
+      END
+      WHERE target_user_id = :user_id
+        AND action IN (
+          :silence_user,
+          :suspend_user,
+          :unsilence_user,
+          :unsuspend_user
+        )
+    SQL
+
+    DB.exec(
+      sql,
+      UserHistory.actions.slice(
+        :silence_user,
+        :suspend_user,
+        :unsilence_user,
+        :unsuspend_user,
+        :removed_silence_user,
+        :removed_unsilence_user,
+        :removed_suspend_user,
+        :removed_unsuspend_user
+      ).merge(user_id: params[:user_id].to_i)
+    )
+
+    render json: success_json
   end
 
   def suspend
@@ -274,7 +316,7 @@ class Admin::UsersController < Admin::AdminController
   def deactivate
     guardian.ensure_can_deactivate!(@user)
     @user.deactivate
-    StaffActionLogger.new(current_user).log_user_deactivate(@user, I18n.t('user.deactivated_by_staff'))
+    StaffActionLogger.new(current_user).log_user_deactivate(@user, I18n.t('user.deactivated_by_staff'), params.slice(:context))
     refresh_browser @user
     render body: nil
   end
@@ -308,7 +350,7 @@ class Admin::UsersController < Admin::AdminController
         silenced: true,
         silence_reason: silencer.user_history.try(:details),
         silenced_till: @user.silenced_till,
-        suspended_at: @user.silenced_at,
+        silenced_at: @user.silenced_at,
         silenced_by: BasicUserSerializer.new(current_user, root: false).as_json
       }
     )
@@ -323,7 +365,7 @@ class Admin::UsersController < Admin::AdminController
         silenced: false,
         silence_reason: nil,
         silenced_till: nil,
-        suspended_at: nil
+        silenced_at: nil
       }
     )
   end
@@ -344,10 +386,10 @@ class Admin::UsersController < Admin::AdminController
 
   def disable_second_factor
     guardian.ensure_can_disable_second_factor!(@user)
-    user_second_factor = @user.user_second_factor
-    raise Discourse::InvalidParameters unless user_second_factor
+    user_second_factor = @user.user_second_factors
+    raise Discourse::InvalidParameters unless !user_second_factor.empty?
 
-    user_second_factor.destroy!
+    user_second_factor.destroy_all
     StaffActionLogger.new(current_user).log_disable_second_factor_auth(@user)
 
     Jobs.enqueue(
@@ -362,20 +404,26 @@ class Admin::UsersController < Admin::AdminController
   def destroy
     user = User.find_by(id: params[:id].to_i)
     guardian.ensure_can_delete_user!(user)
-    begin
-      options = params.slice(:block_email, :block_urls, :block_ip, :context, :delete_as_spammer)
-      options[:delete_posts] = ActiveModel::Type::Boolean.new.cast(params[:delete_posts])
 
-      if UserDestroyer.new(current_user).destroy(user, options)
-        render json: { deleted: true }
-      else
+    options = params.slice(:block_email, :block_urls, :block_ip, :context, :delete_as_spammer)
+    options[:delete_posts] = ActiveModel::Type::Boolean.new.cast(params[:delete_posts])
+
+    hijack do
+      begin
+        if UserDestroyer.new(current_user).destroy(user, options)
+          render json: { deleted: true }
+        else
+          render json: {
+            deleted: false,
+            user: AdminDetailedUserSerializer.new(user, root: false).as_json
+          }
+        end
+      rescue UserDestroyer::PostsExistError
         render json: {
           deleted: false,
-          user: AdminDetailedUserSerializer.new(user, root: false).as_json
-        }
+          message: "User #{user.username} has #{user.post_count} posts, so they can't be deleted."
+        }, status: 403
       end
-    rescue UserDestroyer::PostsExistError
-      raise Discourse::InvalidAccess.new("User #{user.username} has #{user.post_count} posts, so can't be deleted.")
     end
   end
 
@@ -496,34 +544,34 @@ class Admin::UsersController < Admin::AdminController
 
   private
 
-    def perform_post_action
-      return unless params[:post_id].present? &&
-        params[:post_action].present?
+  def perform_post_action
+    return unless params[:post_id].present? &&
+      params[:post_action].present?
 
-      if post = Post.where(id: params[:post_id]).first
-        case params[:post_action]
-        when 'delete'
-          PostDestroyer.new(current_user, post).destroy
-        when 'edit'
-          revisor = PostRevisor.new(post)
+    if post = Post.where(id: params[:post_id]).first
+      case params[:post_action]
+      when 'delete'
+        PostDestroyer.new(current_user, post).destroy
+      when 'edit'
+        revisor = PostRevisor.new(post)
 
-          # Take what the moderator edited in as gospel
-          revisor.revise!(
-            current_user,
-            { raw:  params[:post_edit] },
-            skip_validations: true,
-            skip_revision: true
-          )
-        end
+        # Take what the moderator edited in as gospel
+        revisor.revise!(
+          current_user,
+          { raw:  params[:post_edit] },
+          skip_validations: true,
+          skip_revision: true
+        )
       end
     end
+  end
 
-    def fetch_user
-      @user = User.find_by(id: params[:user_id])
-    end
+  def fetch_user
+    @user = User.find_by(id: params[:user_id])
+  end
 
-    def refresh_browser(user)
-      MessageBus.publish "/file-change", ["refresh"], user_ids: [user.id]
-    end
+  def refresh_browser(user)
+    MessageBus.publish "/file-change", ["refresh"], user_ids: [user.id]
+  end
 
 end

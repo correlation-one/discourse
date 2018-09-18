@@ -73,18 +73,29 @@ class Admin::FlagsController < Admin::AdminController
 
     post_action_type = PostAction.post_action_type_for_post(post.id)
 
+    if !post_action_type
+      render_json_error(
+        I18n.t("flags.errors.already_handled"),
+        status: 409
+      )
+      return
+    end
+
     keep_post = ['silenced', 'suspended', 'keep'].include?(params[:action_on_post])
     delete_post = params[:action_on_post] == "delete"
     restore_post = params[:action_on_post] == "restore"
 
-    PostAction.agree_flags!(post, current_user, delete_post)
-
     if delete_post
+      # PostDestroy calls PostAction.agree_flags!
       PostDestroyer.new(current_user, post).destroy
     elsif restore_post
+      PostAction.agree_flags!(post, current_user, delete_post)
       PostDestroyer.new(current_user, post).recover
-    elsif !keep_post
-      PostAction.hide_post!(post, post_action_type)
+    else
+      PostAction.agree_flags!(post, current_user, delete_post)
+      if !keep_post
+        PostAction.hide_post!(post, post_action_type)
+      end
     end
 
     render body: nil

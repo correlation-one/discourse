@@ -75,26 +75,13 @@ class Auth::DefaultCurrentUserProvider
       @env[BAD_TOKEN] = true
     end
 
-    if current_user && should_update_last_seen?
-      u = current_user
-      Scheduler::Defer.later "Updating Last Seen" do
-        u.update_last_seen!
-        u.update_ip_address!(request.ip)
-      end
-    end
-
     # possible we have an api call, impersonate
     if api_key
       current_user = lookup_api_user(api_key, request)
       raise Discourse::InvalidAccess.new(I18n.t('invalid_api_credentials'), nil, custom_message: "invalid_api_credentials") unless current_user
       raise Discourse::InvalidAccess if current_user.suspended? || !current_user.active
       @env[API_KEY_ENV] = true
-
-      # we do not run this rate limiter while profiling
-      if Rails.env != "profile"
-        limiter_min = RateLimiter.new(nil, "admin_api_min_#{api_key}", GlobalSetting.max_admin_api_reqs_per_key_per_minute, 60)
-        limiter_min.performed!
-      end
+      rate_limit_admin_api_requests(api_key)
     end
 
     # user api key handling
@@ -127,11 +114,18 @@ class Auth::DefaultCurrentUserProvider
       current_user = nil
     end
 
+    if current_user && should_update_last_seen?
+      u = current_user
+      Scheduler::Defer.later "Updating Last Seen" do
+        u.update_last_seen!
+        u.update_ip_address!(request.ip)
+      end
+    end
+
     @env[CURRENT_USER_KEY] = current_user
   end
 
   def refresh_session(user, session, cookies)
-
     # if user was not loaded, no point refreshing session
     # it could be an anonymous path, this would add cost
     return if is_api? || !@env.key?(CURRENT_USER_KEY)
@@ -141,15 +135,12 @@ class Auth::DefaultCurrentUserProvider
 
       needs_rotation = @user_token.auth_token_seen ? rotated_at < UserAuthToken::ROTATE_TIME.ago : rotated_at < UserAuthToken::URGENT_ROTATE_TIME.ago
 
-      if !@user_token.legacy && needs_rotation
+      if needs_rotation
         if @user_token.rotate!(user_agent: @env['HTTP_USER_AGENT'],
                                client_ip: @request.ip,
                                path: @env['REQUEST_PATH'])
           cookies[TOKEN_COOKIE] = cookie_hash(@user_token.unhashed_auth_token)
         end
-      elsif @user_token.legacy
-        # make a new token
-        log_on_user(user, session, cookies)
       end
     end
 
@@ -165,6 +156,7 @@ class Auth::DefaultCurrentUserProvider
                                           client_ip: @request.ip)
 
     cookies[TOKEN_COOKIE] = cookie_hash(@user_token.unhashed_auth_token)
+    unstage_user(user)
     make_developer_admin(user)
     enable_bootstrap_mode(user)
     @env[CURRENT_USER_KEY] = user
@@ -185,6 +177,13 @@ class Auth::DefaultCurrentUserProvider
     hash
   end
 
+  def unstage_user(user)
+    if user.staged
+      user.unstage
+      user.save
+    end
+  end
+
   def make_developer_admin(user)
     if  user.active? &&
         !user.admin &&
@@ -196,11 +195,16 @@ class Auth::DefaultCurrentUserProvider
   end
 
   def enable_bootstrap_mode(user)
-    Jobs.enqueue(:enable_bootstrap_mode, user_id: user.id) if user.admin && user.last_seen_at.nil? && !SiteSetting.bootstrap_mode_enabled && user.is_singular_admin?
+    return if SiteSetting.bootstrap_mode_enabled
+
+    if user.admin && user.last_seen_at.nil? && user.is_singular_admin?
+      Jobs.enqueue(:enable_bootstrap_mode, user_id: user.id)
+    end
   end
 
   def log_off_user(session, cookies)
     user = current_user
+
     if SiteSetting.log_out_strict && user
       user.user_auth_tokens.destroy_all
 
@@ -249,7 +253,16 @@ class Auth::DefaultCurrentUserProvider
         raise Discourse::InvalidAccess
       end
 
+      api_key.update_columns(last_used_at: Time.zone.now)
+
       if client_id.present? && client_id != api_key.client_id
+
+        # invalidate old dupe api key for client if needed
+        UserApiKey
+          .where(client_id: client_id, user_id: api_key.user_id)
+          .where('id <> ?', api_key.id)
+          .destroy_all
+
         api_key.update_columns(client_id: client_id)
       end
 
@@ -276,6 +289,19 @@ class Auth::DefaultCurrentUserProvider
         SingleSignOnRecord.find_by(external_id: external_id.to_s).try(:user)
       end
     end
+  end
+
+  private
+
+  def rate_limit_admin_api_requests(api_key)
+    return if Rails.env == "profile"
+
+    RateLimiter.new(
+      nil,
+      "admin_api_min_#{api_key}",
+      GlobalSetting.max_admin_api_reqs_per_key_per_minute,
+      60
+    ).performed!
   end
 
 end

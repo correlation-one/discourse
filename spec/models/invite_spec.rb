@@ -162,6 +162,13 @@ describe Invite do
       invite = group_private_topic.invite_by_email(tl2_user, 'foo@bar.com')
       expect(invite.groups.count).to eq(0)
     end
+
+    context 'automatic groups' do
+      it 'should not add invited user to automatic groups' do
+        group.update!(automatic: true)
+        expect(group_private_topic.invite_by_email(Fabricate(:admin), iceking).groups.count).to eq(0)
+      end
+    end
   end
 
   context 'an existing user' do
@@ -301,25 +308,8 @@ describe Invite do
         end
 
         context 'again' do
-          context "without a passthrough" do
-            before do
-              SiteSetting.invite_passthrough_hours = 0
-            end
-
-            it 'will not redeem twice' do
-              expect(invite.redeem).to be_blank
-            end
-          end
-
-          context "with a passthrough" do
-            before do
-              SiteSetting.invite_passthrough_hours = 1
-            end
-
-            it 'will not redeem twice' do
-              expect(invite.redeem).to be_present
-              expect(invite.redeem.email).to eq(user.email)
-            end
+          it 'will not redeem twice' do
+            expect(invite.redeem).to be_blank
           end
         end
       end

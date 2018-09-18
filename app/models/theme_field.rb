@@ -4,6 +4,17 @@ class ThemeField < ActiveRecord::Base
 
   belongs_to :upload
 
+  scope :find_by_theme_ids, ->(theme_ids) {
+    return none unless theme_ids.present?
+
+    where(theme_id: theme_ids)
+      .joins(
+        "JOIN (
+          SELECT #{theme_ids.map.with_index { |id, idx| "#{id.to_i} AS theme_id, #{idx} AS sort_column" }.join(" UNION ALL SELECT ")}
+        ) as X ON X.theme_id = theme_fields.theme_id")
+      .order("sort_column")
+  }
+
   def self.types
     @types ||= Enum.new(html: 0,
                         scss: 1,
@@ -44,10 +55,12 @@ class ThemeField < ActiveRecord::Base
   def transpile(es6_source, version)
     template = Tilt::ES6ModuleTranspilerTemplate.new {}
     wrapped = <<PLUGIN_API_JS
+if ('Discourse' in window) {
 Discourse._registerPluginCode('#{version}', api => {
   #{settings(es6_source)}
   #{es6_source}
 });
+}
 PLUGIN_API_JS
 
     template.babel_transpile(wrapped)
@@ -60,20 +73,22 @@ PLUGIN_API_JS
     doc.css('script[type="text/x-handlebars"]').each do |node|
       name = node["name"] || node["data-template-name"] || "broken"
 
+      is_raw = name =~ /\.raw$/
       setting_helpers = ''
       theme.cached_settings.each do |k, v|
         val = v.is_a?(String) ? "\"#{v.gsub('"', "\\u0022")}\"" : v
-        setting_helpers += "{{theme-setting-injector context=this key=\"#{k}\" value=#{val}}}\n"
+        setting_helpers += "{{theme-setting-injector #{is_raw ? "" : "context=this"} key=\"#{k}\" value=#{val}}}\n"
       end
       hbs_template = setting_helpers + node.inner_html
 
-      is_raw = name =~ /\.raw$/
       if is_raw
-        template = "requirejs('discourse-common/lib/raw-handlebars').template(#{Barber::Precompiler.compile(node.inner_html)})"
+        template = "requirejs('discourse-common/lib/raw-handlebars').template(#{Barber::Precompiler.compile(hbs_template)})"
         node.replace <<COMPILED
           <script>
             (function() {
+              if ('Discourse' in window) {
               Discourse.RAW_TEMPLATES[#{name.sub(/\.raw$/, '').inspect}] = #{template};
+              }
             })();
           </script>
 COMPILED
@@ -82,7 +97,9 @@ COMPILED
         node.replace <<COMPILED
           <script>
             (function() {
+              if ('Em' in window) {
               Ember.TEMPLATES[#{name.inspect}] = #{template};
+              }
             })();
           </script>
 COMPILED
@@ -221,8 +238,8 @@ COMPILED
     Stylesheet::Manager.clear_theme_cache! if self.name.include?("scss")
 
     # TODO message for mobile vs desktop
-    MessageBus.publish "/header-change/#{theme.key}", self.value if theme && self.name == "header"
-    MessageBus.publish "/footer-change/#{theme.key}", self.value if theme && self.name == "footer"
+    MessageBus.publish "/header-change/#{theme.id}", self.value if theme && self.name == "header"
+    MessageBus.publish "/footer-change/#{theme.id}", self.value if theme && self.name == "footer"
   end
 end
 

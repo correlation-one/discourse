@@ -1,11 +1,5 @@
 require 'rails_helper'
 
-# In the ghetto ... getting the spec to run in autospec
-#  thing is we need to load up all auth really early pre-fork
-#  it means that the require is not going to get a new copy
-Auth.send(:remove_const, :GithubAuthenticator)
-load 'auth/github_authenticator.rb'
-
 def auth_token_for(user)
   {
     extra: {
@@ -30,9 +24,8 @@ describe Auth::GithubAuthenticator do
   let(:user) { Fabricate(:user) }
 
   context 'after_authenticate' do
-
-    it 'can authenticate and create a user record for already existing users' do
-      hash = {
+    let(:data) do
+      {
         extra: {
           all_emails: [{
             email: user.email,
@@ -47,12 +40,20 @@ describe Auth::GithubAuthenticator do
         },
         uid: "100"
       }
+    end
 
-      result = authenticator.after_authenticate(hash)
+    it 'can authenticate and create a user record for already existing users' do
+      result = authenticator.after_authenticate(data)
 
       expect(result.user.id).to eq(user.id)
       expect(result.username).to eq(user.username)
       expect(result.name).to eq(user.name)
+      expect(result.email).to eq(user.email)
+      expect(result.email_valid).to eq(true)
+
+      # Authenticates again when user has Github user info
+      result = authenticator.after_authenticate(data)
+
       expect(result.email).to eq(user.email)
       expect(result.email_valid).to eq(true)
     end
@@ -201,12 +202,40 @@ describe Auth::GithubAuthenticator do
       expect(result.email_valid).to eq(true)
     end
 
+    it 'can connect to a different existing user account' do
+      user1 = Fabricate(:user)
+      user2 = Fabricate(:user)
+
+      GithubUserInfo.create!(user_id: user1.id, github_user_id: 100, screen_name: "boris")
+
+      result = authenticator.after_authenticate(data, existing_account: user2)
+
+      expect(result.user.id).to eq(user2.id)
+      expect(GithubUserInfo.exists?(user_id: user1.id)).to eq(false)
+      expect(GithubUserInfo.exists?(user_id: user2.id)).to eq(true)
+    end
+
+  end
+
+  context 'revoke' do
+    let(:user) { Fabricate(:user) }
+    let(:authenticator) { Auth::GithubAuthenticator.new }
+
+    it 'raises exception if no entry for user' do
+      expect { authenticator.revoke(user) }.to raise_error(Discourse::NotFound)
+    end
+
+      it 'revokes correctly' do
+        GithubUserInfo.create!(user_id: user.id, github_user_id: 100, screen_name: "boris")
+        expect(authenticator.can_revoke?).to eq(true)
+        expect(authenticator.revoke(user)).to eq(true)
+        expect(authenticator.description_for_user(user)).to eq("")
+      end
+
   end
 
   describe 'avatar retrieval' do
     let(:job_klass) { Jobs::DownloadAvatarFromUrl }
-
-    before { SiteSetting.queue_jobs = true }
 
     context 'when user has a custom avatar' do
       let(:user_avatar) { Fabricate(:user_avatar, custom_upload: Fabricate(:upload)) }

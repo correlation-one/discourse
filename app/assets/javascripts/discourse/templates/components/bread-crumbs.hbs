@@ -1,13 +1,16 @@
-{{category-drop
+{{
+  category-drop
   category=firstCategory
-  categories=parentCategories}}
+  categories=parentCategoriesSorted
+  countSubcategories=true
+}}
 
 {{#if childCategories}}
   {{category-drop
     category=secondCategory
     parentCategory=firstCategory
     categories=childCategories
-    subCategory="true"
+    subCategory=true
     noSubcategories=noSubcategories}}
 {{/if}}
 

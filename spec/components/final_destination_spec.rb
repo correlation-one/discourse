@@ -47,6 +47,14 @@ describe FinalDestination do
     FinalDestination.new(url, opts)
   end
 
+  it 'correctly parses ignored hostnames' do
+    fd = FinalDestination.new('https://meta.discourse.org',
+      ignore_redirects: ['http://google.com', 'youtube.com', 'https://meta.discourse.org', '://bing.com']
+    )
+
+    expect(fd.ignored).to eq(['test.localhost', 'google.com', 'meta.discourse.org'])
+  end
+
   describe '.resolve' do
 
     it "has a ready status code before anything happens" do
@@ -335,6 +343,20 @@ describe FinalDestination do
     it "returns false for a valid ipv4" do
       expect(fd("https://52.84.143.67").is_dest_valid?).to eq(true)
       expect(fd("https://104.25.153.10").is_dest_valid?).to eq(true)
+    end
+
+    it "returns false for short ip" do
+      lookup = lambda do |host|
+        # How IPs are looked up for single digits
+        if host == "0"
+          "0.0.0.0"
+        elsif host == "1"
+          "0.0.0.1"
+        end
+      end
+
+      expect(FinalDestination.new('https://0/logo.png', lookup_ip: lookup).is_dest_valid?).to eq(false)
+      expect(FinalDestination.new('https://1/logo.png', lookup_ip: lookup).is_dest_valid?).to eq(false)
     end
 
     it "returns false for private ipv4" do

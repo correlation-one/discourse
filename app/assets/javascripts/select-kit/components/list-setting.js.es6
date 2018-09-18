@@ -17,17 +17,17 @@ export default MultiSelectComponent.extend({
     }
 
     if (this.get("nameProperty").indexOf("color") > -1) {
-      this.set("headerComponentOptions", Ember.Object.create({
+      this.get("headerComponentOptions").setProperties({
         selectedNameComponent: "multi-select/selected-color"
-      }));
+      });
     }
   },
 
   computeContent() {
     let content;
     if (isNone(this.get("choices"))) {
-      content = this.get("settingValue").split(this.get("tokenSeparator"));;
-    }  else {
+      content = this.get("settingValue").split(this.get("tokenSeparator"));
+    } else {
       content = this.get("choices");
     }
 
@@ -40,8 +40,8 @@ export default MultiSelectComponent.extend({
 
   computeValues() {
     return this.get("settingValue")
-               .split(this.get("tokenSeparator"))
-               .filter(c => c);
+      .split(this.get("tokenSeparator"))
+      .filter(c => c);
   },
 
   _handleTabOnKeyDown(event) {
