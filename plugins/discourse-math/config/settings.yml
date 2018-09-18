@@ -8,6 +8,3 @@ plugins:
   discourse_math_enable_accessibility:
     default: false
     client: true
-  discourse_math_enable_asciimath:
-    default: false
-    client: true

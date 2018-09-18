@@ -2,44 +2,43 @@
 //
 //
 //
-
-function isSafeBoundary(character_code, delimiter_code, md) {
-  if (character_code === delimiter_code) {
+function isSafeBoundary(code, md) {
+  if (code === 36) {
     return false;
   }
 
-  if (md.utils.isWhiteSpace(character_code)) {
+  if (md.utils.isWhiteSpace(code)) {
     return true;
   }
 
-  if (md.utils.isMdAsciiPunct(character_code)) {
+  if (md.utils.isMdAsciiPunct(code)) {
     return true;
   }
 
-  if (md.utils.isPunctChar(character_code)) {
+  if (md.utils.isPunctChar(code)) {
     return true;
   }
 
   return false;
 }
 
-function math_input(state, silent, delimiter_code) {
+function inlineMath(state, silent) {
 
   let pos = state.pos,
       posMax = state.posMax;
 
-  if (silent || state.src.charCodeAt(pos) !== delimiter_code || posMax < pos+2) {
+  if (silent || state.src.charCodeAt(pos) !== 36 /* $ */ || posMax < pos+2) {
     return false;
   }
 
   // too short
-  if (state.src.charCodeAt(pos+1) === delimiter_code) {
+  if (state.src.charCodeAt(pos+1) === 36 /* $ */) {
     return false;
   }
 
   if (pos > 0) {
     let prev = state.src.charCodeAt(pos-1);
-    if (!isSafeBoundary(prev, delimiter_code, state.md)) {
+    if (!isSafeBoundary(prev, state.md)) {
       return false;
     }
   }
@@ -48,7 +47,7 @@ function math_input(state, silent, delimiter_code) {
   let found;
   for(let i=pos+1; i<posMax; i++) {
     let code = state.src.charCodeAt(i);
-    if (code === delimiter_code && state.src.charCodeAt(i-1) !== 92 /* \ */) {
+    if (code === 36 /* $ */ && state.src.charCodeAt(i-1) !== 92 /* \ */) {
       found = i;
       break;
     }
@@ -60,7 +59,7 @@ function math_input(state, silent, delimiter_code) {
 
   if (found+1 <= posMax) {
     let next = state.src.charCodeAt(found+1);
-    if (next && !isSafeBoundary(next, delimiter_code, state.md)) {
+    if (next && !isSafeBoundary(next, state.md)) {
       return false;
     }
   }
@@ -69,18 +68,9 @@ function math_input(state, silent, delimiter_code) {
   let token = state.push('html_raw', '', 0);
 
   const escaped = state.md.utils.escapeHtml(data);
-  let math_class = delimiter_code === 36 ? "'math'" : "'asciimath'";
-  token.content = `<span class=${math_class}>${escaped}</span>`;
+  token.content = `<span class='math'>${escaped}</span>`;
   state.pos = found+1;
   return true;
-}
-
-function inlineMath(state, silent) {
-  return math_input(state, silent, 36 /* $ */)
-}
-
-function asciiMath(state, silent) {
-  return math_input(state, silent, 37 /* % */)
 }
 
 function isBlockMarker(state, start, max, md) {
@@ -154,16 +144,11 @@ export function setup(helper) {
     return;
   }
 
-  let enable_asciimath;
   helper.registerOptions((opts, siteSettings) => {
     opts.features.math = siteSettings.discourse_math_enabled;
-    enable_asciimath = siteSettings.discourse_math_enable_asciimath;
   });
 
   helper.registerPlugin(md => {
-    if(enable_asciimath) {
-      md.inline.ruler.after('escape', 'asciimath', asciiMath);
-    }
     md.inline.ruler.after('escape', 'math', inlineMath);
     md.block.ruler.after('code', 'math', blockMath, {
       alt: ['paragraph', 'reference', 'blockquote', 'list']
