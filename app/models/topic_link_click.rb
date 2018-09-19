@@ -7,7 +7,6 @@ class TopicLinkClick < ActiveRecord::Base
   belongs_to :user
 
   validates_presence_of :topic_link_id
-  validates_presence_of :ip_address
 
   WHITELISTED_REDIRECT_HOSTNAMES = Set.new(%W{www.youtube.com youtu.be})
 
@@ -18,7 +17,7 @@ class TopicLinkClick < ActiveRecord::Base
 
     uri = begin
       URI.parse(url)
-    rescue URI::InvalidURIError
+    rescue URI::Error
     end
 
     urls = Set.new
@@ -48,7 +47,7 @@ class TopicLinkClick < ActiveRecord::Base
       if Discourse.asset_host.present?
         cdn_uri = begin
           URI.parse(Discourse.asset_host)
-        rescue URI::InvalidURIError
+        rescue URI::Error
         end
 
         if cdn_uri && cdn_uri.hostname == uri.hostname && uri.path.starts_with?(cdn_uri.path)
@@ -60,7 +59,7 @@ class TopicLinkClick < ActiveRecord::Base
       if SiteSetting.Upload.s3_cdn_url.present?
         cdn_uri = begin
           URI.parse(SiteSetting.Upload.s3_cdn_url)
-        rescue URI::InvalidURIError
+        rescue URI::Error
         end
 
         if cdn_uri && cdn_uri.hostname == uri.hostname && uri.path.starts_with?(cdn_uri.path)
@@ -108,6 +107,7 @@ class TopicLinkClick < ActiveRecord::Base
     rate_key = "link-clicks:#{link.id}:#{args[:user_id] || args[:ip]}"
     if $redis.setnx(rate_key, "1")
       $redis.expire(rate_key, 1.day.to_i)
+      args[:ip] = nil if args[:user_id]
       create!(topic_link_id: link.id, user_id: args[:user_id], ip_address: args[:ip])
     end
 
@@ -125,7 +125,7 @@ end
 #  user_id       :integer
 #  created_at    :datetime         not null
 #  updated_at    :datetime         not null
-#  ip_address    :inet             not null
+#  ip_address    :inet
 #
 # Indexes
 #

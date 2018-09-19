@@ -8,6 +8,8 @@ task "smoke:test" do
     abort "Chrome 59 or higher is required to run smoke tests in headless mode."
   end
 
+  system("yarn install --dev")
+
   url = ENV["URL"]
   if !url
     require "#{Rails.root}/config/environment"
@@ -25,6 +27,9 @@ task "smoke:test" do
   if ENV["AUTH_USER"] && ENV["AUTH_PASSWORD"]
     request.basic_auth(ENV['AUTH_USER'], ENV['AUTH_PASSWORD'])
   end
+
+  dir = ENV["SMOKE_TEST_SCREENSHOT_PATH"] || 'tmp/smoke-test-screenshots'
+  FileUtils.mkdir_p(dir) unless Dir.exists?(dir)
 
   response = Net::HTTP.start(uri.hostname, uri.port, use_ssl: uri.scheme == 'https') do |http|
     http.request(request)

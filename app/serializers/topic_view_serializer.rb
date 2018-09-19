@@ -36,7 +36,6 @@ class TopicViewSerializer < ApplicationSerializer
                         :deleted_at,
                         :pending_posts_count,
                         :user_id,
-                        :pm_with_non_human_user?,
                         :featured_link,
                         :featured_link_root_domain,
                         :pinned_globally,
@@ -67,7 +66,8 @@ class TopicViewSerializer < ApplicationSerializer
              :unicode_title,
              :message_bus_last_id,
              :participant_count,
-             :destination_category_id
+             :destination_category_id,
+             :pm_with_non_human_user
 
   # TODO: Split off into proper object / serializer
   def details
@@ -186,10 +186,8 @@ class TopicViewSerializer < ApplicationSerializer
   end
 
   def last_read_post_id
-    return nil unless object.filtered_post_stream && last_read_post_number
-    object.filtered_post_stream.each do |ps|
-      return ps[0] if ps[1] === last_read_post_number
-    end
+    return nil unless last_read_post_number
+    object.filtered_post_id(last_read_post_number)
   end
   alias_method :include_last_read_post_id?, :has_topic_user?
 
@@ -281,6 +279,10 @@ class TopicViewSerializer < ApplicationSerializer
     private_message?(object.topic)
   end
 
+  def pm_with_non_human_user
+    object.topic.pm_with_non_human_user?
+  end
+
   def participant_count
     object.participant_count
   end
@@ -297,8 +299,8 @@ class TopicViewSerializer < ApplicationSerializer
 
   private
 
-    def private_message?(topic)
-      @private_message ||= topic.private_message?
-    end
+  def private_message?(topic)
+    @private_message ||= topic.private_message?
+  end
 
 end

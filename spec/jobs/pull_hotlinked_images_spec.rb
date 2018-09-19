@@ -32,6 +32,7 @@ describe Jobs::PullHotlinkedImages do
 
   describe '#execute' do
     before do
+      SiteSetting.queue_jobs = false
       FastImage.expects(:size).returns([100, 100]).at_least_once
     end
 
@@ -102,12 +103,12 @@ describe Jobs::PullHotlinkedImages do
       end
 
       it 'all combinations' do
-        post = Fabricate(:post, raw: "
-<img src='#{image_url}'>
-#{url}
-<img src='#{broken_image_url}'>
-<a href='#{url}'><img src='#{large_image_url}'></a>
-        ")
+        post = Fabricate(:post, raw: <<~BODY)
+        <img src='#{image_url}'>
+        #{url}
+        <img src='#{broken_image_url}'>
+        <a href='#{url}'><img src='#{large_image_url}'></a>
+        BODY
 
         Jobs::ProcessPost.new.execute(post_id: post.id)
         Jobs::PullHotlinkedImages.new.execute(post_id: post.id)

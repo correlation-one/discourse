@@ -1,10 +1,10 @@
 import MultiSelectComponent from "select-kit/components/multi-select";
-import Tags from "select-kit/mixins/tags";
+import TagsMixin from "select-kit/mixins/tags";
 import renderTag from "discourse/lib/render-tag";
 import computed from "ember-addons/ember-computed-decorators";
 const { get, run, makeArray } = Ember;
 
-export default MultiSelectComponent.extend(Tags, {
+export default MultiSelectComponent.extend(TagsMixin, {
   pluginApiIdentifiers: ["tag-chooser"],
   classNames: "tag-chooser",
   isAsync: true,
@@ -28,7 +28,7 @@ export default MultiSelectComponent.extend(Tags, {
 
     this.set("termMatchesForbidden", false);
 
-    this.set("templateForRow", (rowComponent) => {
+    this.set("templateForRow", rowComponent => {
       const tag = rowComponent.get("computedContent");
       return renderTag(get(tag, "value"), {
         count: get(tag, "originalContent.count"),
@@ -37,7 +37,14 @@ export default MultiSelectComponent.extend(Tags, {
     });
 
     if (!this.get("unlimitedTagCount")) {
-      this.set("maximum", parseInt(this.get("limit") || this.get("maximum") || this.get("siteSettings.max_tags_per_topic")));
+      this.set(
+        "maximum",
+        parseInt(
+          this.get("limit") ||
+            this.get("maximum") ||
+            this.get("siteSettings.max_tags_per_topic")
+        )
+      );
     }
   },
 
@@ -58,19 +65,31 @@ export default MultiSelectComponent.extend(Tags, {
   actions: {
     onFilter(filter) {
       this.expand();
-      this.set("searchDebounce", run.debounce(this, this._prepareSearch, filter, 200));
+      this.set(
+        "searchDebounce",
+        run.debounce(this, this._prepareSearch, filter, 200)
+      );
     },
 
     onExpand() {
-      this.set("searchDebounce", run.debounce(this, this._prepareSearch, this.get("filter"), 200));
+      this.set(
+        "searchDebounce",
+        run.debounce(this, this._prepareSearch, this.get("filter"), 200)
+      );
     },
 
     onDeselect() {
-      this.set("searchDebounce", run.debounce(this, this._prepareSearch, this.get("filter"), 200));
+      this.set(
+        "searchDebounce",
+        run.debounce(this, this._prepareSearch, this.get("filter"), 200)
+      );
     },
 
     onSelect() {
-      this.set("searchDebounce", run.debounce(this, this._prepareSearch, this.get("filter"), 50));
+      this.set(
+        "searchDebounce",
+        run.debounce(this, this._prepareSearch, this.get("filter"), 50)
+      );
     }
   },
 
@@ -84,8 +103,9 @@ export default MultiSelectComponent.extend(Tags, {
     };
 
     if (selectedTags.length || this.get("blacklist").length) {
-      data.selected_tags = _.uniq(selectedTags.concat(this.get("blacklist")))
-                            .slice(0, 100);
+      data.selected_tags = _.uniq(
+        selectedTags.concat(this.get("blacklist"))
+      ).slice(0, 100);
     }
 
     if (!this.get("everyTag")) data.filterForInput = true;

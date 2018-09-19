@@ -3,7 +3,8 @@ import computed from "ember-addons/ember-computed-decorators";
 import Category from "discourse/models/category";
 
 export default ComboBoxSelectBoxHeaderComponent.extend({
-  layoutName: "select-kit/templates/components/category-drop/category-drop-header",
+  layoutName:
+    "select-kit/templates/components/category-drop/category-drop-header",
   classNames: "category-drop-header",
 
   classNameBindings: ["categoryStyleClass"],
@@ -41,20 +42,15 @@ export default ComboBoxSelectBoxHeaderComponent.extend({
       if (categoryBackgroundColor || categoryTextColor) {
         let style = "";
         if (categoryBackgroundColor) {
-          if (categoryStyle === "bar") {
-            style += `border-color: #${categoryBackgroundColor};`;
-          } else if (categoryStyle === "box") {
-            style += `background-color: #${categoryBackgroundColor};`;
-            if (categoryTextColor) { style += `color: #${categoryTextColor};`; }
+          if (categoryStyle === "box") {
+            style += `border-color: #${categoryBackgroundColor}; background-color: #${categoryBackgroundColor};`;
+            if (categoryTextColor) {
+              style += `color: #${categoryTextColor};`;
+            }
           }
         }
-
         return style.htmlSafe();
       }
-    }
-
-    if (categoryStyle === "box") {
-      return `background-color: ${categoryBackgroundColor}; color: ${categoryTextColor}`.htmlSafe();
     }
   },
 
@@ -63,5 +59,5 @@ export default ComboBoxSelectBoxHeaderComponent.extend({
 
     this.$().attr("style", this.get("categoryStyle"));
     this.$(".caret-icon").attr("style", this.get("categoryStyle"));
-  },
+  }
 });

@@ -94,7 +94,7 @@ describe User do
   describe '#count_by_signup_date' do
     before(:each) do
       User.destroy_all
-      freeze_time
+      freeze_time DateTime.parse('2017-02-01 12:00')
       Fabricate(:user)
       Fabricate(:user, created_at: 1.day.ago)
       Fabricate(:user, created_at: 1.day.ago)
@@ -416,17 +416,16 @@ describe User do
   describe 'associated_accounts' do
     it 'should correctly find social associations' do
       user = Fabricate(:user)
-      expect(user.associated_accounts).to eq(I18n.t("user.no_accounts_associated"))
+      expect(user.associated_accounts).to eq([])
 
       TwitterUserInfo.create(user_id: user.id, screen_name: "sam", twitter_user_id: 1)
       FacebookUserInfo.create(user_id: user.id, username: "sam", facebook_user_id: 1)
       GoogleUserInfo.create(user_id: user.id, email: "sam@sam.com", google_user_id: 1)
       GithubUserInfo.create(user_id: user.id, screen_name: "sam", github_user_id: 1)
-      Oauth2UserInfo.create(user_id: user.id, provider: "linkedin", email: "sam@sam.com", uid: 1)
       InstagramUserInfo.create(user_id: user.id, screen_name: "sam", instagram_user_id: "examplel123123")
 
       user.reload
-      expect(user.associated_accounts).to eq("Twitter(sam), Facebook(sam), Google(sam@sam.com), GitHub(sam), Instagram(sam), linkedin(sam@sam.com)")
+      expect(user.associated_accounts.map { |a| a[:name] }).to contain_exactly('twitter', 'facebook', 'google_oauth2', 'github', 'instagram')
 
     end
   end
@@ -448,6 +447,14 @@ describe User do
   describe 'name heuristics' do
     it 'is able to guess a decent name from an email' do
       expect(User.suggest_name('sam.saffron@gmail.com')).to eq('Sam Saffron')
+    end
+
+    it 'is able to guess a decent name from username' do
+      expect(User.suggest_name('@sam.saffron')).to eq('Sam Saffron')
+    end
+
+    it 'is able to guess a decent name from name' do
+      expect(User.suggest_name('sam saffron')).to eq('Sam Saffron')
     end
   end
 
@@ -539,12 +546,27 @@ describe User do
       expect(User.username_available?('tESt')).to eq(false)
     end
 
+    it 'returns true when reserved username is explicity allowed' do
+      SiteSetting.reserved_usernames = 'test|donkey'
+
+      expect(User.username_available?(
+        'tESt',
+        nil,
+        allow_reserved_username: true)
+      ).to eq(true)
+    end
+
     it "returns true when username is associated to a staged user of the same email" do
       staged = Fabricate(:user, staged: true, email: "foo@bar.com")
       expect(User.username_available?(staged.username, staged.primary_email.email)).to eq(true)
 
       user = Fabricate(:user, email: "bar@foo.com")
       expect(User.username_available?(user.username, user.primary_email.email)).to eq(false)
+    end
+
+    it 'returns false when a username equals an existing group name' do
+      Fabricate(:group, name: 'foo')
+      expect(User.username_available?('Foo')).to eq(false)
     end
   end
 
@@ -977,6 +999,12 @@ describe User do
       u.user_stat.first_post_created_at = 25.hours.ago
       expect(u.new_user_posting_on_first_day?).to eq(false)
     end
+
+    it "considers trust level 0 users as new users unconditionally" do
+      u = Fabricate(:user, created_at: 28.hours.ago, trust_level: TrustLevel[0])
+      u.user_stat.first_post_created_at = 25.hours.ago
+      expect(u.new_user_posting_on_first_day?).to eq(true)
+    end
   end
 
   describe 'api keys' do
@@ -1053,6 +1081,7 @@ describe User do
 
       context "with a reply" do
         before do
+          SiteSetting.queue_jobs = false
           PostCreator.new(Fabricate(:user),
                             raw: 'whatever this is a raw post',
                             topic_id: topic.id,
@@ -1224,7 +1253,6 @@ describe User do
   describe "refresh_avatar" do
     it "enqueues the update_gravatar job when automatically downloading gravatars" do
       SiteSetting.automatically_download_gravatars = true
-      SiteSetting.queue_jobs = true
 
       user = Fabricate(:user)
 
@@ -1236,24 +1264,36 @@ describe User do
 
   describe "#purge_unactivated" do
     let!(:user) { Fabricate(:user) }
-    let!(:inactive) { Fabricate(:user, active: false) }
-    let!(:inactive_old) { Fabricate(:user, active: false, created_at: 1.month.ago) }
+    let!(:unactivated) { Fabricate(:user, active: false) }
+    let!(:unactivated_old) { Fabricate(:user, active: false, created_at: 1.month.ago) }
+    let!(:unactivated_old_with_system_pm) { Fabricate(:user, active: false, created_at: 2.months.ago) }
+    let!(:unactivated_old_with_human_pm) { Fabricate(:user, active: false, created_at: 2.months.ago) }
+
+    before do
+      PostCreator.new(Discourse.system_user,
+        title: "Welcome to our Discourse",
+        raw: "This is a welcome message",
+        archetype: Archetype.private_message,
+        target_usernames: [unactivated_old_with_system_pm.username],
+      ).create
+
+      PostCreator.new(user,
+        title: "Welcome to our Discourse",
+        raw: "This is a welcome message",
+        archetype: Archetype.private_message,
+        target_usernames: [unactivated_old_with_human_pm.username],
+      ).create
+    end
 
     it 'should only remove old, unactivated users' do
       User.purge_unactivated
-      all_users = User.all
-      expect(all_users.include?(user)).to eq(true)
-      expect(all_users.include?(inactive)).to eq(true)
-      expect(all_users.include?(inactive_old)).to eq(false)
+      expect(User.real.all).to match_array([user, unactivated, unactivated_old_with_human_pm])
     end
 
     it "does nothing if purge_unactivated_users_grace_period_days is 0" do
       SiteSetting.purge_unactivated_users_grace_period_days = 0
       User.purge_unactivated
-      all_users = User.all
-      expect(all_users.include?(user)).to eq(true)
-      expect(all_users.include?(inactive)).to eq(true)
-      expect(all_users.include?(inactive_old)).to eq(true)
+      expect(User.real.all).to match_array([user, unactivated, unactivated_old, unactivated_old_with_system_pm, unactivated_old_with_human_pm])
     end
   end
 
@@ -1312,6 +1352,14 @@ describe User do
       expect(group_history.action).to eq(GroupHistory.actions[:add_user_to_group])
       expect(group_history.acting_user).to eq(Discourse.system_user)
       expect(group_history.target_user).to eq(user)
+    end
+
+    it "is automatically added to a group when the email matches the SSO record" do
+      user = Fabricate(:user, active: true, email: "sso@bar.com")
+      user.create_single_sign_on_record(external_id: 123, external_email: "sso@bar.com", last_payload: "")
+      user.set_automatic_groups
+      group.reload
+      expect(group.users.include?(user)).to eq(true)
     end
 
     it "get attributes from the group" do
@@ -1717,6 +1765,65 @@ describe User do
 
     it 'should be able to filter by username' do
       filter_by(:filter_by_username_or_email)
+    end
+  end
+
+  describe "#secondary_emails" do
+    let(:user) { Fabricate(:user_single_email) }
+
+    it "only contains secondary emails" do
+      expect(user.user_emails.secondary).to eq([])
+
+      secondary_email = Fabricate(:secondary_email, user: user)
+
+      expect(user.user_emails.secondary).to contain_exactly(secondary_email)
+    end
+  end
+
+  describe "set_random_avatar" do
+    it "sets a random avatar when selectable avatars is enabled" do
+      avatar1 = Fabricate(:upload)
+      avatar2 = Fabricate(:upload)
+      SiteSetting.selectable_avatars_enabled = true
+      SiteSetting.selectable_avatars = [avatar1.url, avatar2.url].join("\n")
+
+      user = Fabricate(:user)
+      expect(user.uploaded_avatar_id).not_to be(nil)
+      expect([avatar1.id, avatar2.id]).to include(user.uploaded_avatar_id)
+      expect(user.user_avatar.custom_upload_id).to eq(user.uploaded_avatar_id)
+    end
+  end
+
+  describe "ensure_consistency!" do
+
+    it "will clean up dangling avatars" do
+      upload = Fabricate(:upload)
+      user = Fabricate(:user, uploaded_avatar_id: upload.id)
+
+      upload.destroy!
+      user.reload
+      expect(user.uploaded_avatar_id).to eq(nil)
+
+      user.update_columns(uploaded_avatar_id: upload.id)
+
+      User.ensure_consistency!
+
+      user.reload
+      expect(user.uploaded_avatar_id).to eq(nil)
+    end
+
+  end
+
+  describe '#match_title_to_primary_group_changes' do
+    let(:primary_group_a) { Fabricate(:group, title: 'A', users: [user]) }
+    let(:primary_group_b) { Fabricate(:group, title: 'B', users: [user]) }
+
+    it "updates user's title only when it is blank or matches the previous primary group" do
+      expect { user.update(primary_group: primary_group_a) }.to change { user.reload.title }.from(nil).to('A')
+      expect { user.update(primary_group: primary_group_b) }.to change { user.reload.title }.from('A').to('B')
+
+      user.update(title: 'Different')
+      expect { user.update(primary_group: primary_group_a) }.to_not change { user.reload.title }
     end
   end
 end

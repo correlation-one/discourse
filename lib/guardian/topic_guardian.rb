@@ -34,6 +34,12 @@ module TopicGuardian
     (!category || Category.topic_create_allowed(self).where(id: category_id).count == 1)
   end
 
+  def can_move_topic_to_category?(category)
+    category = Category === category ? category : Category.find(category || SiteSetting.uncategorized_category_id)
+
+    is_staff? || (can_create_topic_on_category?(category) && !category.require_topic_approval?)
+  end
+
   def can_create_post_on_topic?(topic)
     # No users can create posts on deleted topics
     return false if topic.blank?
@@ -86,15 +92,15 @@ module TopicGuardian
   def can_delete_topic?(topic)
     !topic.trashed? &&
     is_staff? &&
-    !(Category.exists?(topic_id: topic.id)) &&
+    !(topic.is_category_topic?) &&
     !Discourse.static_doc_topic_ids.include?(topic.id)
   end
 
   def can_convert_topic?(topic)
     return false unless SiteSetting.enable_personal_messages?
     return false if topic.blank?
-    return false if topic && topic.trashed?
-    return false if Category.where("topic_id = ?", topic.id).exists?
+    return false if topic.trashed?
+    return false if topic.is_category_topic?
     return true if is_admin?
     is_moderator? && can_create_post?(topic)
   end
@@ -139,5 +145,9 @@ module TopicGuardian
   def can_edit_featured_link?(category_id)
     return false unless SiteSetting.topic_featured_link_enabled
     Category.where(id: category_id || SiteSetting.uncategorized_category_id, topic_featured_link_allowed: true).exists?
+  end
+
+  def can_update_bumped_at?
+    is_staff?
   end
 end

@@ -16,8 +16,9 @@ uk:
           format: '%n %u'
           units:
             byte:
-              few: Байтів
               one: Байт
+              few: Байтів
+              many: Байт
               other: Байт
             gb: ГБ
             kb: КБ
@@ -33,26 +34,31 @@ uk:
         date_year: "MMM 'YY"
       medium:
         x_minutes:
-          few: '%{count} хвилини'
-          one: 1 хвилина
-          other: '%{count} хвилин'
+          one: "1 хвилина"
+          few: "%{count} хвилини"
+          many: "%{count} хвилин"
+          other: "%{count} хвилин"
         x_hours:
-          few: '%{count} години'
-          one: 1 година
-          other: '%{count} годин'
+          one: "1 година"
+          few: "%{count} години"
+          many: "%{count} годин"
+          other: "%{count} годин"
         x_days:
-          few: '%{count} дні'
-          one: 1 день
-          other: '%{count} днів'
+          one: "1 день"
+          few: "%{count} дні"
+          many: "%{count} днів"
+          other: "%{count} днів"
       medium_with_ago:
         x_hours:
-          few: 'годин тому: %{count}'
-          one: 1 годину тому
-          other: '%{count} годин тому'
+          one: "1 годину тому"
+          few: "годин тому: %{count}"
+          many: "%{count} годин тому"
+          other: "%{count} годин тому"
         x_days:
-          few: 'днів тому: %{count}'
-          one: 1 день тому
-          other: '%{count} днів тому'
+          one: "1 день тому"
+          few: "днів тому: %{count}"
+          many: "%{count} днів тому"
+          other: "%{count} днів тому"
       previous_month: 'Попередній місяць'
       next_month: 'Наступний місяць'
     share:
@@ -93,14 +99,15 @@ uk:
     show_help: "налаштування"
     links: "Посилання"
     links_lowercase:
-      few: посилань
-      one: посилання
-      other: посилання
+      one: "посилання"
+      few: "посилань"
+      many: "посилання"
+      other: "посилання"
     faq: "Часті запитання"
     guidelines: "Інструкції"
     privacy_policy: "Політика конфіденційності"
     privacy: "Конфіденційність"
-    terms_of_service: "Умови Використання"
+    tos: "Умови Використання"
     mobile_view: "Вигляд для мобільного"
     desktop_view: "Вигляд для настільного комп'ютера"
     you: "Ви"
@@ -119,9 +126,10 @@ uk:
     max_of_count: "Не більше {{count}}"
     alternation: "або"
     character_count:
-      few: '{{count}} символи'
-      one: '{{count}} символ'
-      other: '{{count}} символів'
+      one: "{{count}} символ"
+      few: "{{count}} символи"
+      many: "{{count}} символів"
+      other: "{{count}} символів"
     suggested_topics:
       title: "Пропоновані теми"
     about:
@@ -132,8 +140,6 @@ uk:
       our_moderators: "Модератори"
       stat:
         all_time: "Весь час"
-        last_7_days: "Останні 7 днів"
-        last_30_days: "Останні 30 днів"
       like_count: "Вподобання"
       topic_count: "Теми"
       post_count: "Дописи:"
@@ -216,9 +222,10 @@ uk:
       posts_read: "Прочитані"
       posts_read_long: "Повідомлень Прочитано"
       total_rows:
-        few: '%{count} користувачі'
-        one: '%{count} користувач'
-        other: '%{count} користувачів'
+        one: "%{count} користувач"
+        few: "%{count} користувачі"
+        many: "%{count} користувачів"
+        other: "%{count} користувачів"
     group_histories:
       actions:
         change_group_setting: "Змінити налаштування групи"
@@ -297,7 +304,6 @@ uk:
       notifications: "Сповіщення"
       statistics: "Статистика"
       desktop_notifications:
-        label: "Сповіщення"
         perm_default: "Ввімкнути сповіщення"
         perm_denied_btn: "Немає доступу"
         disable: "Вимкнути сповіщення"
@@ -524,7 +530,6 @@ uk:
       disable: "Показати видалені дописи"
     private_message_info:
       title: "Повідомлення"
-      invite: "Запросити інших..."
       remove_allowed_user: "Ви впевнені, що хочете видалити {{name}} з цього повідомлення?"
     email: 'Електронна пошта'
     username: 'Ім''я користувача'
@@ -559,9 +564,6 @@ uk:
       resend_activation_email: "Натисніть тут, щоб отримати ще один лист з активацією."
       sent_activation_email_again: "Ми надіслали на Вашу скриньку <b>{{currentEmail}}</b> ще один лист для активації облікового запису. Протягом кількох хвилин він має з'явитися у Вашій скриньці. Не забувайте також перевіряти теку зі спамом."
       to_continue: "Будь ласка Увійдіть"
-      google:
-        title: "через Google"
-        message: "Автентифікація через Google (перевірте, щоб блокувальники спливних вікон були вимкнені)"
       google_oauth2:
         title: "з Google"
       twitter:
@@ -813,10 +815,10 @@ uk:
         label: "Новий Власник Дописів"
         placeholder: "ім'я користувача нового власника"
         instructions:
-          few: Будь ласка, оберіть нового власника {{count}} дописів, що належали <b>{{old_user}}</b>.
-          one: Будь ласка, оберіть нового власника допису, що належав <b>{{old_user}}</b>.
-          other: Будь ласка, оберіть нового власника {{count}} дописів, що належали <b>{{old_user}}</b>.
-        instructions_warn: "Зверніть увагу, що будь-які повідомлення про цей допис не будуть передані новому користувачеві заднім числом.<br>Увага: В даний час залежні від допису дані не передаються по новому користувачеві. Використовуйте з обережністю."
+          one: "Будь ласка, оберіть нового власника допису, що належав <b>{{old_user}}</b>."
+          few: "Будь ласка, оберіть нового власника {{count}} дописів, що належали <b>{{old_user}}</b>."
+          many: "Будь ласка, оберіть нового власника {{count}} дописів, що належали <b>{{old_user}}</b>."
+          other: "Будь ласка, оберіть нового власника {{count}} дописів, що належали <b>{{old_user}}</b>."
       multi_select:
         select: 'вибрати'
         selected: 'вибрано ({{count}})'
@@ -825,9 +827,10 @@ uk:
         select_all: обрати усе
         deselect_all: скасувати вибір всього
         description:
-          few: 'Ви обрали дописів: <b>{{count}}</b>.'
           one: Ви обрали <b>1</b> допис.
-          other: 'Ви обрали дописів: <b>{{count}}</b>.'
+          few: "Ви обрали дописів: <b>{{count}}</b>."
+          many: "Ви обрали дописів: <b>{{count}}</b>."
+          other: "Ви обрали дописів: <b>{{count}}</b>."
     post:
       edit_reason: "Причина: "
       post_number: "допис {{number}}"
@@ -871,7 +874,6 @@ uk:
           inappropriate: "Відкликати скаргу"
           bookmark: "Скасувати закладку"
           like: "Скасувати вподобання"
-          vote: "Відкликати голос"
         people:
           notify_user: "надіслати повідомлення"
         by_you:
@@ -881,7 +883,6 @@ uk:
           notify_moderators: "Ви позначили допис для модерації"
           bookmark: "Ви лишили тут закладку"
           like: "Ви це вподобали"
-          vote: "Ви проголосували за цей допис"
       revisions:
         controls:
           first: "Перша версія"
@@ -899,7 +900,6 @@ uk:
       can: 'може&hellip; '
       none: '(без категорії)'
       all: 'Всі категорії'
-      choose: 'Select a category&hellip;'
       edit: 'редагувати'
       edit_long: "Редагувати"
       view: 'Переглянути теми, що належать до категорії'
@@ -931,7 +931,6 @@ uk:
       edit_permissions: "Редагувати дозволи"
       add_permission: "Додати дозвіл"
       this_year: "цього року"
-      position: "position"
       default_position: "Default Position"
       parent: "Батьківська категорія"
       notifications:
@@ -1097,8 +1096,6 @@ uk:
         reports:
           today: "Сьогодні"
           yesterday: "Вчора"
-          last_7_days: "Останні 7 днів"
-          last_30_days: "Останні 30 днів"
           all_time: "Весь час"
           7_days_ago: "7 днів тому"
           30_days_ago: "30 днів тому"
@@ -1216,7 +1213,6 @@ uk:
             confirm: "Are you sure you want to cancel the current operation?"
           backup:
             title: "Create a backup"
-            without_uploads: "Так (не включати файли)"
           download:
             label: "Завантажити"
           destroy:
@@ -1340,7 +1336,6 @@ uk:
             user_placeholder: "username"
             address_placeholder: "name@example.com"
             type_placeholder: "digest, signup..."
-            skipped_reason_placeholder: "reason"
       logs:
         title: "Журнали"
         action: "Дія"
@@ -1634,6 +1629,7 @@ uk:
         edit: "редагувати"
         category: "Допис у Категорію"
         add_host: "Додати Хост"
+        embed_by_username: "Ім'я користувача для створення теми"
         embed_post_limit: "Максимальна кількість дописів для вставки"
         embed_classname_whitelist: "Дозволені імена класів CSS"
         feed_polling_enabled: "Імпортувати дописи через RSS/ATOM"

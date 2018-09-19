@@ -1,20 +1,22 @@
 <div class="group-members-actions">
-  {{text-field value=filterInput
-      placeholderKey=filterPlaceholder
-      class="group-username-filter no-blur"}}
+    {{text-field value=filterInput
+        placeholderKey=filterPlaceholder
+        class="group-username-filter no-blur"}}
 
-  {{#if canManageGroup}}
-    {{#if currentUser.admin}}
-      {{group-members-dropdown
-          showAddMembersModal="showAddMembersModal"
-          showBulkAddModal="showBulkAddModal"}}
-    {{else}}
+  <div class="group-members-manage">
+    {{#if canManageGroup}}
       {{d-button icon="plus"
-          action="showAddMembersModal"
-          label="groups.add_members.title"
-          class="group-members-add"}}
+      action="showAddMembersModal"
+      label="groups.add_members.title"
+      class="group-members-add"}}
+      {{#if currentUser.admin}}
+        {{d-button icon="plus"
+        action="showBulkAddModal"
+        label="admin.groups.bulk_add.title"
+        class="group-bulk-add"}}
+      {{/if}}
     {{/if}}
-  {{/if}}
+  </div>
 </div>
 
 {{#if hasMembers}}

@@ -69,7 +69,7 @@ class PostRevisor
   end
 
   track_topic_field(:category_id) do |tc, category_id|
-    if category_id == 0 || tc.guardian.can_create_topic_on_category?(category_id)
+    if category_id == 0 || tc.guardian.can_move_topic_to_category?(category_id)
       tc.record_change('category_id', tc.topic.category_id, category_id)
       tc.check_result(tc.topic.change_category_to_id(category_id))
     end
@@ -190,6 +190,7 @@ class PostRevisor
     # WARNING: do not pull this into the transaction
     # it can fire events in sidekiq before the post is done saving
     # leading to corrupt state
+    QuotedPost.extract_from(@post)
     post_process_post
 
     update_topic_word_counts
@@ -198,7 +199,6 @@ class PostRevisor
     grant_badge
 
     TopicLink.extract_from(@post)
-    QuotedPost.extract_from(@post)
 
     successfully_saved_post_and_topic
   end
@@ -566,7 +566,7 @@ class PostRevisor
   end
 
   def update_topic_word_counts
-    Topic.exec_sql("UPDATE topics
+    DB.exec("UPDATE topics
                     SET word_count = (
                       SELECT SUM(COALESCE(posts.word_count, 0))
                       FROM posts
@@ -577,7 +577,7 @@ class PostRevisor
 
   def alert_users
     return if @editor.id == Discourse::SYSTEM_USER_ID
-    PostAlerter.new.after_save_post(@post)
+    Jobs.enqueue(:post_alert, post_id: @post.id)
   end
 
   def publish_changes
