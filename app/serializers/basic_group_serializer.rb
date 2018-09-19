@@ -43,7 +43,7 @@ class BasicGroupSerializer < ApplicationSerializer
   end
 
   def include_has_messages?
-    staff?
+    staff? || scope.can_see_group_messages?(object)
   end
 
   def include_bio_raw?
@@ -68,15 +68,15 @@ class BasicGroupSerializer < ApplicationSerializer
 
   private
 
-    def staff?
-      @staff ||= scope.is_staff?
-    end
+  def staff?
+    @staff ||= scope.is_staff?
+  end
 
-    def user_group_ids
-      @options[:user_group_ids]
-    end
+  def user_group_ids
+    @options[:user_group_ids]
+  end
 
-    def owner_group_ids
-      @options[:owner_group_ids]
-    end
+  def owner_group_ids
+    @options[:owner_group_ids]
+  end
 end

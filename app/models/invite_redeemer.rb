@@ -8,12 +8,6 @@ InviteRedeemer = Struct.new(:invite, :username, :name, :password, :user_custom_f
       end
     end
 
-    # If `invite_passthrough_hours` is defined, allow them to re-use the invite link
-    # to login again.
-    if invite.redeemed_at && invite.redeemed_at >= SiteSetting.invite_passthrough_hours.hours.ago
-      return get_existing_user
-    end
-
     nil
   end
 
@@ -50,7 +44,7 @@ InviteRedeemer = Struct.new(:invite, :username, :name, :password, :user_custom_f
 
       user_fields.each do |f|
         field_val = field_params[f.id.to_s]
-        fields["user_field_#{f.id}"] = field_val[0...UserField.max_length] unless field_val.blank?
+        fields["#{User::USER_FIELD_PREFIX}#{f.id}"] = field_val[0...UserField.max_length] unless field_val.blank?
       end
       user.custom_fields = fields
     end

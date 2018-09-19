@@ -13,7 +13,9 @@ module Autospec
     watch(%r{^app/(.+)(\.erb|\.haml)$})                 { |m| "spec/#{m[1]}#{m[2]}_spec.rb" }
     watch(%r{^spec/.+_spec\.rb$})
     watch(%r{^spec/support/.+\.rb$})                    { "spec" }
-    watch("app/controllers/application_controller.rb")  { "spec/controllers" }
+    watch("app/controllers/application_controller.rb")  { "spec/requests" }
+
+    watch(%r{app/controllers/(.+).rb})  { |m| "spec/requests/#{m[1]}_spec.rb" }
 
     watch(%r{^app/views/(.+)/.+\.(erb|haml)$})          { |m| "spec/requests/#{m[1]}_spec.rb" }
 
@@ -23,6 +25,8 @@ module Autospec
     watch(%r{^plugins/.*/discourse-markdown/.*\.js\.es6$}) { "spec/components/pretty_text_spec.rb" }
 
     watch(%r{^plugins/.*/spec/.*\.rb})
+    watch(%r{^(plugins/.*/)plugin\.rb})     { |m| "#{m[1]}spec" }
+    watch(%r{^(plugins/.*)/(lib|app)})    { |m| "#{m[1]}/spec/integration" }
     watch(%r{^(plugins/.*)/lib/(.*)\.rb}) { |m| "#{m[1]}/spec/lib/#{m[2]}_spec.rb" }
 
     RELOADERS = Set.new

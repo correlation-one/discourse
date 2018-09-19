@@ -6,7 +6,7 @@ describe UsersEmailController do
     it 'errors out for invalid tokens' do
       get "/u/authorize-email/asdfasdf"
 
-      expect(response).to be_success
+      expect(response.status).to eq(200)
       expect(response.body).to include(I18n.t('change_email.already_done'))
     end
 
@@ -21,7 +21,7 @@ describe UsersEmailController do
       it 'confirms with a correct token' do
         get "/u/authorize-email/#{user.email_tokens.last.token}"
 
-        expect(response).to be_success
+        expect(response.status).to eq(200)
 
         body = CGI.unescapeHTML(response.body)
 
@@ -52,7 +52,7 @@ describe UsersEmailController do
           :user_logged_in, :user_first_logged_in
         )
 
-        expect(response).to be_success
+        expect(response.status).to eq(200)
         expect(response.body).to include(I18n.t('change_email.confirmed'))
 
         user.reload
@@ -61,8 +61,17 @@ describe UsersEmailController do
         expect(user.user_stat.reset_bounce_score_after).to eq(nil)
       end
 
+      it 'automatically adds the user to a group when the email matches' do
+        group = Fabricate(:group, automatic_membership_email_domains: "example.com")
+
+        get "/u/authorize-email/#{user.email_tokens.last.token}"
+
+        expect(response.status).to eq(200)
+        expect(group.reload.users.include?(user)).to eq(true)
+      end
+
       context 'second factor required' do
-        let!(:second_factor) { Fabricate(:user_second_factor, user: user) }
+        let!(:second_factor) { Fabricate(:user_second_factor_totp, user: user) }
 
         it 'requires a second factor token' do
           get "/u/authorize-email/#{user.email_tokens.last.token}"
@@ -77,7 +86,8 @@ describe UsersEmailController do
 
         it 'adds an error on a second factor attempt' do
           get "/u/authorize-email/#{user.email_tokens.last.token}", params: {
-            second_factor_token: "000000"
+            second_factor_token: "000000",
+            second_factor_method: UserSecondFactor.methods[:totp]
           }
 
           expect(response.status).to eq(200)
@@ -86,15 +96,16 @@ describe UsersEmailController do
 
         it 'confirms with a correct second token' do
           get "/u/authorize-email/#{user.email_tokens.last.token}", params: {
-            second_factor_token: ROTP::TOTP.new(second_factor.data).now
+            second_factor_token: ROTP::TOTP.new(second_factor.data).now,
+            second_factor_method: UserSecondFactor.methods[:totp]
           }
 
           expect(response.status).to eq(200)
 
           response_body = response.body
 
-          expect(response.body).not_to include(I18n.t("login.second_factor_title"))
-          expect(response.body).not_to include(I18n.t("login.invalid_second_factor_code"))
+          expect(response_body).not_to include(I18n.t("login.second_factor_title"))
+          expect(response_body).not_to include(I18n.t("login.invalid_second_factor_code"))
         end
       end
     end
@@ -119,6 +130,12 @@ describe UsersEmailController do
         expect(response.status).to eq(400)
       end
 
+      it 'raises an error without an invalid email' do
+        put "/u/#{user.username}/preferences/email.json", params: { email: "sam@not-email.com'" }
+        expect(response.status).to eq(422)
+        expect(response.body).to include("email is invalid")
+      end
+
       it "raises an error if you can't edit the user's email" do
         Guardian.any_instance.expects(:can_edit_email?).with(user).returns(false)
 
@@ -140,7 +157,7 @@ describe UsersEmailController do
               email: other_user.email
             }
 
-            expect(response).to_not be_success
+            expect(response).to_not be_successful
           end
 
           it 'raises an error if there is whitespace too' do
@@ -148,7 +165,7 @@ describe UsersEmailController do
               email: "#{other_user.email} "
             }
 
-            expect(response).to_not be_success
+            expect(response).to_not be_successful
           end
         end
 
@@ -162,7 +179,7 @@ describe UsersEmailController do
               email: other_user.email
             }
 
-            expect(response).to be_success
+            expect(response.status).to eq(200)
           end
         end
       end
@@ -175,7 +192,7 @@ describe UsersEmailController do
             email: other_user.email.upcase
           }
 
-          expect(response).to_not be_success
+          expect(response).to_not be_successful
         end
       end
 
@@ -186,7 +203,7 @@ describe UsersEmailController do
           email: "not_good@mailinator.com"
         }
 
-        expect(response).to_not be_success
+        expect(response).to_not be_successful
       end
 
       it 'raises an error when new email domain is not present in email_domains_whitelist site setting' do
@@ -196,7 +213,7 @@ describe UsersEmailController do
           email: new_email
         }
 
-        expect(response).to_not be_success
+        expect(response).to_not be_successful
       end
 
       context 'success' do

@@ -1,4 +1,4 @@
-import toMarkdown from 'discourse/lib/to-markdown';
+import toMarkdown from "discourse/lib/to-markdown";
 
 QUnit.module("lib:to-markdown");
 
@@ -70,7 +70,7 @@ QUnit.test("converts heading tags", assert => {
 });
 
 QUnit.test("converts ul list tag", assert => {
-  const html = `
+  let html = `
   <ul>
     <li>Item 1</li>
     <li>
@@ -84,7 +84,20 @@ QUnit.test("converts ul list tag", assert => {
     <li>Item 3</li>
   </ul>
   `;
-  const markdown = `* Item 1\n* Item 2\n  * Sub Item 1\n  * Sub Item 2\n\n  * Sub Item 3\n    * Sub *Sub* Item 1\n    * Sub **Sub** Item 2\n* Item 3`;
+  let markdown = `* Item 1\n* Item 2\n  * Sub Item 1\n  * Sub Item 2\n  * Sub Item 3\n    * Sub *Sub* Item 1\n    * Sub **Sub** Item 2\n* Item 3`;
+  assert.equal(toMarkdown(html), markdown);
+
+  html = `
+<ul>
+  <li><p><span>Bullets at level 1</span></p></li>
+  <li><p><span>Bullets at level 1</span></p></li>  <ul>    <li><p><span>Bullets at level 2</span></p></li>    <li><p><span>Bullets at level 2</span></p></li>    <ul>      <li><p><span>Bullets at level 3</span></p></li>    </ul>    <li><p><span>Bullets at level 2</span></p></li>  </ul>  <li><p><span>Bullets at level 1</span></p></li></ul>  `;
+  markdown = `* Bullets at level 1
+* Bullets at level 1
+  * Bullets at level 2
+  * Bullets at level 2
+    * Bullets at level 3
+  * Bullets at level 2
+* Bullets at level 1`;
   assert.equal(toMarkdown(html), markdown);
 });
 
@@ -104,7 +117,7 @@ QUnit.test("converts table tags", assert => {
       <tbody>
         <tr><td>Lorem</td><td>ipsum</td></tr>
         <tr><td><b>dolor</b></td> <td><i>sit amet</i></td> </tr>
-        
+
         </tbody>
 </table>
   `;
@@ -119,31 +132,34 @@ QUnit.test("converts table tags", assert => {
   assert.equal(toMarkdown(html), markdown);
 });
 
-QUnit.test("replace pipes with spaces if table format not supported", assert => {
-  let html = `<table>
+QUnit.test(
+  "replace pipes with spaces if table format not supported",
+  assert => {
+    let html = `<table>
     <thead> <tr><th>Headi<br><br>ng 1</th><th>Head 2</th></tr> </thead>
       <tbody>
         <tr><td>Lorem</td><td>ipsum</td></tr>
         <tr><td><a href="http://example.com"><img src="http://dolor.com/image.png" /></a></td> <td><i>sit amet</i></td></tr></tbody>
 </table>
   `;
-  let markdown = `Headi\n\nng 1 Head 2\nLorem ipsum\n[![](http://dolor.com/image.png)](http://example.com) *sit amet*`;
-  assert.equal(toMarkdown(html), markdown);
+    let markdown = `Headi\n\nng 1 Head 2\nLorem ipsum\n[![](http://dolor.com/image.png)](http://example.com) *sit amet*`;
+    assert.equal(toMarkdown(html), markdown);
 
-  html = `<table>
+    html = `<table>
     <thead> <tr><th>Heading 1</th></tr> </thead>
       <tbody>
         <tr><td>Lorem</td></tr>
         <tr><td><i>sit amet</i></td></tr></tbody>
 </table>
   `;
-  markdown = `Heading 1\nLorem\n*sit amet*`;
-  assert.equal(toMarkdown(html), markdown);
+    markdown = `Heading 1\nLorem\n*sit amet*`;
+    assert.equal(toMarkdown(html), markdown);
 
-  html = `<table><tr><td>Lorem</td><td><strong>sit amet</strong></td></tr></table>`;
-  markdown = `Lorem **sit amet**`;
-  assert.equal(toMarkdown(html), markdown);
-});
+    html = `<table><tr><td>Lorem</td><td><strong>sit amet</strong></td></tr></table>`;
+    markdown = `Lorem **sit amet**`;
+    assert.equal(toMarkdown(html), markdown);
+  }
+);
 
 QUnit.test("converts img tag", assert => {
   const url = "https://example.com/image.png";
@@ -154,10 +170,16 @@ QUnit.test("converts img tag", assert => {
   assert.equal(toMarkdown(html), `![description|50x100](${url})`);
 
   html = `<a href="http://example.com"><img src="${url}" alt="description" /></a>`;
-  assert.equal(toMarkdown(html), `[![description](${url})](http://example.com)`);
+  assert.equal(
+    toMarkdown(html),
+    `[![description](${url})](http://example.com)`
+  );
 
   html = `<a href="http://example.com">description <img src="${url}" /></a>`;
-  assert.equal(toMarkdown(html), `[description ![](${url})](http://example.com)`);
+  assert.equal(
+    toMarkdown(html),
+    `[description ![](${url})](http://example.com)`
+  );
 
   html = `<img alt="description" />`;
   assert.equal(toMarkdown(html), "");
@@ -167,7 +189,8 @@ QUnit.test("converts img tag", assert => {
 });
 
 QUnit.test("supporting html tags by keeping them", assert => {
-  let html = "Lorem <del>ipsum dolor</del> sit <big>amet, <ins>consectetur</ins></big>";
+  let html =
+    "Lorem <del>ipsum dolor</del> sit <big>amet, <ins>consectetur</ins></big>";
   let output = html;
   assert.equal(toMarkdown(html), output);
 
@@ -179,6 +202,9 @@ QUnit.test("supporting html tags by keeping them", assert => {
   assert.equal(toMarkdown(html), output);
 
   html = `Lorem <del>ipsum dolor</del> sit.`;
+  assert.equal(toMarkdown(html), html);
+
+  html = `Have you tried clicking the <kbd>Help Me!</kbd> button?`;
   assert.equal(toMarkdown(html), html);
 
   html = `Lorem <a href="http://example.com"><del>ipsum \n\n\n dolor</del> sit.</a>`;
@@ -213,11 +239,13 @@ QUnit.test("converts blockquote tag", assert => {
   let output = "> Lorem ipsum";
   assert.equal(toMarkdown(html), output);
 
-  html = "<blockquote>Lorem ipsum</blockquote><blockquote><p>dolor sit amet</p></blockquote>";
+  html =
+    "<blockquote>Lorem ipsum</blockquote><blockquote><p>dolor sit amet</p></blockquote>";
   output = "> Lorem ipsum\n\n> dolor sit amet";
   assert.equal(toMarkdown(html), output);
 
-  html = "<blockquote>\nLorem ipsum\n<blockquote><p>dolor <blockquote>sit</blockquote> amet</p></blockquote></blockquote>";
+  html =
+    "<blockquote>\nLorem ipsum\n<blockquote><p>dolor <blockquote>sit</blockquote> amet</p></blockquote></blockquote>";
   output = "> Lorem ipsum\n> > dolor\n> > > sit\n> > amet";
   assert.equal(toMarkdown(html), output);
 });
@@ -284,5 +312,31 @@ QUnit.test("converts list tag from word", assert => {
     <![endif]>Item 4</p>
   <!--EndFragment-->List`;
   const markdown = `Sample\n\n* **Item 1**\n  * *Item 2*\n    * Item 3\n* Item 4\n\nList`;
+  assert.equal(toMarkdown(html), markdown);
+});
+
+QUnit.test("keeps mention/hash class", assert => {
+  const html = `
+    <p>User mention: <a class="mention" href="/u/discourse">@discourse</a></p>
+    <p>Group mention: <a class="mention-group" href="/groups/discourse">@discourse-group</a></p>
+    <p>Category link: <a class="hashtag" href="/c/foo/1">#<span>foo</span></a></p>
+    <p>Sub-category link: <a class="hashtag" href="/c/foo/bar/2">#<span>foo:bar</span></a></p>
+  `;
+
+  const markdown = `User mention: @discourse\n\nGroup mention: @discourse-group\n\nCategory link: #foo\n\nSub-category link: #foo:bar`;
+
+  assert.equal(toMarkdown(html), markdown);
+});
+
+QUnit.test("keeps emoji and removes click count", assert => {
+  const html = `
+    <p>
+      A <a href="http://example.com">link</a><span class="badge badge-notification clicks" title="1 click">1</span> with click count
+      and <img class="emoji" title=":boom:" src="https://d11a6trkgmumsb.cloudfront.net/images/emoji/twitter/boom.png?v=5" alt=":boom:" /> emoji.
+    </p>
+  `;
+
+  const markdown = `A [link](http://example.com) with click count and :boom: emoji.`;
+
   assert.equal(toMarkdown(html), markdown);
 });

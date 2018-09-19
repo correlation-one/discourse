@@ -121,9 +121,10 @@ def migrate_from_s3
 
   puts "Migrating uploads from S3 to local storage for '#{db}'..."
 
-  max_file_size_kb = [SiteSetting.max_image_size_kb, SiteSetting.max_attachment_size_kb].max.kilobytes
-
-  Post.where("user_id > 0 AND raw LIKE '%.s3%.amazonaws.com/%'").find_each do |post|
+  Post
+    .where("user_id > 0")
+    .where("raw LIKE '%.s3%.amazonaws.com/%' OR raw LIKE '%(upload://%'")
+    .find_each do |post|
     begin
       updated = false
 
@@ -145,6 +146,31 @@ def migrate_from_s3
             if new_upload&.save
               updated = true
               url = new_upload.url
+            end
+          end
+
+          url
+        rescue
+          url
+        end
+      end
+
+      post.raw.gsub!(/(upload:\/\/[0-9a-zA-Z]+\.\w+)/) do |url|
+        begin
+          if sha1 = Upload.sha1_from_short_url(url)
+            if upload = Upload.find_by(sha1: sha1)
+              if upload.url.start_with?("//")
+                file = FileHelper.download("http:#{upload.url}", max_file_size: 20.megabytes, tmp_file_name: "from_s3", follow_redirect: true)
+                filename = upload.original_filename
+                origin = upload.origin
+                upload.destroy
+
+                new_upload = UploadCreator.new(file, filename, origin: origin).create_for(post.user_id || -1)
+                if new_upload&.save
+                  updated = true
+                  url = new_upload.url
+                end
+              end
             end
           end
 
@@ -227,7 +253,7 @@ def migrate_to_s3
       putc "X"
       next
     ensure
-      file.try(:close!) rescue nil
+      file&.close
     end
 
     # remap the URL
@@ -676,11 +702,30 @@ task "uploads:analyze", [:cache_path, :limit] => :environment do |_, args|
   printf "%-25s | %-25s | %-25s | %-25s\n", 'username', 'total size of uploads', 'number of uploads', 'number of optimized images'
   puts "-" * 110
 
-  User.exec_sql(sql).values.each do |username, num_of_uploads, total_size_of_uploads, num_of_optimized_images|
+  DB.query_single(sql).each do |username, num_of_uploads, total_size_of_uploads, num_of_optimized_images|
     printf "%-25s | %-25s | %-25s | %-25s\n", username, helper.number_to_human_size(total_size_of_uploads), num_of_uploads, num_of_optimized_images
   end
 
   puts "\n"
   puts "List of file paths @ #{path}"
   puts "Duration: #{Time.zone.now - now} seconds"
+end
+
+task "uploads:fix_incorrect_extensions" => :environment do
+  require_dependency "upload_fixer"
+  UploadFixer.fix_all_extensions
+end
+
+task "uploads:recover" => :environment do
+  require_dependency "upload_recovery"
+
+  dry_run = ENV["DRY_RUN"].present?
+
+  if ENV["RAILS_DB"]
+    UploadRecovery.new(dry_run: dry_run).recover
+  else
+    RailsMultisite::ConnectionManagement.each_connection do |db|
+      UploadRecovery.new(dry_run: dry_run).recover
+    end
+  end
 end

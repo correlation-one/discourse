@@ -51,6 +51,19 @@ RSpec.describe Admin::GroupsController do
     end
   end
 
+  describe '#remove_owner' do
+    it 'should work' do
+      group.add_owner(user)
+
+      delete "/admin/groups/#{group.id}/owners.json", params: {
+        user_id: user.id
+      }
+
+      expect(response.status).to eq(200)
+      expect(group.group_users.where(owner: true)).to eq([])
+    end
+  end
+
   describe "#bulk_perform" do
     let(:group) do
       Fabricate(:group,
@@ -65,6 +78,8 @@ RSpec.describe Admin::GroupsController do
     let(:user2) { Fabricate(:user, trust_level: 4) }
 
     it "can assign users to a group by email or username" do
+      SiteSetting.queue_jobs = false
+
       put "/admin/groups/bulk.json", params: {
         group_id: group.id, users: [user.username.upcase, user2.email, 'doesnt_exist']
       }

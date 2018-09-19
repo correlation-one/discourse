@@ -38,6 +38,15 @@ describe PostCreator do
       expect(post.wiki).to eq(true)
     end
 
+    it "can be created with a hidden reason" do
+      hri = Post.hidden_reasons[:flag_threshold_reached]
+      post = PostCreator.create(user, basic_topic_params.merge(hidden_reason_id: hri))
+      expect(post.hidden).to eq(true)
+      expect(post.hidden_at).to be_present
+      expect(post.hidden_reason_id).to eq(hri)
+      expect(post.topic.visible).to eq(false)
+    end
+
     it "ensures the user can create the topic" do
       Guardian.any_instance.expects(:can_create?).with(Topic, nil).returns(false)
       expect { creator.create }.to raise_error(Discourse::InvalidAccess)
@@ -70,6 +79,14 @@ describe PostCreator do
 
     context "success" do
       before { creator }
+
+      it "is not hidden" do
+        p = creator.create
+        expect(p.hidden).to eq(false)
+        expect(p.hidden_at).not_to be_present
+        expect(p.hidden_reason_id).to eq(nil)
+        expect(p.topic.visible).to eq(true)
+      end
 
       it "doesn't return true for spam" do
         creator.create
@@ -169,11 +186,25 @@ describe PostCreator do
       end
 
       it 'queues up post processing job when saved' do
-        Jobs.expects(:enqueue).with(:feature_topic_users, has_key(:topic_id))
-        Jobs.expects(:enqueue).with(:process_post, has_key(:post_id))
-        Jobs.expects(:enqueue).with(:post_alert, has_key(:post_id))
-        Jobs.expects(:enqueue).with(:notify_mailing_list_subscribers, has_key(:post_id))
         creator.create
+
+        post = Post.last
+        post_id = post.id
+        topic_id = post.topic_id
+
+        process_post_args = Jobs::ProcessPost.jobs.first["args"].first
+        expect(process_post_args["post_id"]).to eq(post_id)
+
+        feature_topic_users_args = Jobs::FeatureTopicUsers.jobs.first["args"].first
+        expect(feature_topic_users_args["topic_id"]).to eq(topic_id)
+
+        post_alert_args = Jobs::PostAlert.jobs.first["args"].first
+        expect(post_alert_args["post_id"]).to eq(post_id)
+
+        notify_mailing_list_subscribers_args =
+          Jobs::NotifyMailingListSubscribers.jobs.first["args"].first
+
+        expect(notify_mailing_list_subscribers_args["post_id"]).to eq(post_id)
       end
 
       it 'passes the invalidate_oneboxes along to the job if present' do
@@ -266,7 +297,6 @@ describe PostCreator do
       it 'creates a post with featured link' do
         SiteSetting.topic_featured_link_enabled = true
         SiteSetting.min_first_post_length = 100
-        SiteSetting.queue_jobs = true
 
         post = creator_with_featured_link.create
         expect(post.topic.featured_link).to eq('http://www.discourse.org')
@@ -290,10 +320,6 @@ describe PostCreator do
       end
 
       describe "topic's auto close" do
-        before do
-          SiteSetting.queue_jobs = true
-        end
-
         it "doesn't update topic's auto close when it's not based on last post" do
           freeze_time
 
@@ -838,6 +864,8 @@ describe PostCreator do
     end
 
     it 'can post to a group correctly' do
+      SiteSetting.queue_jobs = false
+
       expect(post.topic.archetype).to eq(Archetype.private_message)
       expect(post.topic.topic_allowed_users.count).to eq(1)
       expect(post.topic.topic_allowed_groups.count).to eq(1)
@@ -1039,6 +1067,22 @@ describe PostCreator do
       )
       topic_user = TopicUser.find_by(user_id: user.id, topic_id: post.topic_id)
       expect(topic_user.notification_level).to eq(TopicUser.notification_levels[:regular])
+    end
+
+    it "user preferences for notification level when replying doesn't affect PMs" do
+      user.user_option.update!(notification_level_when_replying: 1)
+
+      admin = Fabricate(:admin)
+      pm = Fabricate(:private_message_topic, user: admin)
+
+      pm.invite(admin, user.username)
+      PostCreator.create(
+        user,
+        topic_id: pm.id,
+        raw: "this is a test reply 123 123 ;)"
+      )
+      topic_user = TopicUser.find_by(user_id: user.id, topic_id: pm.id)
+      expect(topic_user.notification_level).to eq(3)
     end
   end
 

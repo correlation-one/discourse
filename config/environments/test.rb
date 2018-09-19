@@ -50,6 +50,10 @@ Discourse::Application.configure do
     config.log_level = :fatal
   end
 
+  if defined? RspecErrorTracker
+    config.middleware.insert_after ActionDispatch::Flash, RspecErrorTracker
+  end
+
   config.after_initialize do
     SiteSetting.defaults.tap do |s|
       s.set_regardless_of_locale(:s3_upload_bucket, 'bucket')
@@ -59,7 +63,9 @@ Discourse::Application.configure do
       s.set_regardless_of_locale(:crawl_images, false)
       s.set_regardless_of_locale(:download_remote_images_to_local, false)
       s.set_regardless_of_locale(:unique_posts_mins, 0)
-      s.set_regardless_of_locale(:queue_jobs, false)
+      # Running jobs are expensive and most of our tests are not concern with
+      # code that runs inside jobs
+      s.set_regardless_of_locale(:queue_jobs, true)
       # disable plugins
       if ENV['LOAD_PLUGINS'] == '1'
         s.set_regardless_of_locale(:discourse_narrative_bot_enabled, false)

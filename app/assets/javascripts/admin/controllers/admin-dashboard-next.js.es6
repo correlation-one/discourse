@@ -1,79 +1,90 @@
-import DiscourseURL from "discourse/lib/url";
+import { setting } from "discourse/lib/computed";
 import computed from "ember-addons/ember-computed-decorators";
-import AdminDashboardNext from 'admin/models/admin-dashboard-next';
+import AdminDashboardNext from "admin/models/admin-dashboard-next";
+import VersionCheck from "admin/models/version-check";
+
+const PROBLEMS_CHECK_MINUTES = 1;
 
 export default Ember.Controller.extend({
-  queryParams: ["period"],
-  period: "all",
   isLoading: false,
   dashboardFetchedAt: null,
-  exceptionController: Ember.inject.controller('exception'),
+  exceptionController: Ember.inject.controller("exception"),
+  showVersionChecks: setting("version_checks"),
 
-  diskSpace: Ember.computed.alias("model.attributes.disk_space"),
+  @computed("problems.length")
+  foundProblems(problemsLength) {
+    return this.currentUser.get("admin") && (problemsLength || 0) > 0;
+  },
+
+  fetchProblems() {
+    if (this.get("isLoadingProblems")) return;
+
+    if (
+      !this.get("problemsFetchedAt") ||
+      moment()
+        .subtract(PROBLEMS_CHECK_MINUTES, "minutes")
+        .toDate() > this.get("problemsFetchedAt")
+    ) {
+      this._loadProblems();
+    }
+  },
 
   fetchDashboard() {
-    if (this.get("isLoading")) return;
+    const versionChecks = this.siteSettings.version_checks;
 
-    if (!this.get("dashboardFetchedAt") || moment().subtract(30, "minutes").toDate() > this.get("dashboardFetchedAt")) {
+    if (this.get("isLoading") || !versionChecks) return;
+
+    if (
+      !this.get("dashboardFetchedAt") ||
+      moment()
+        .subtract(30, "minutes")
+        .toDate() > this.get("dashboardFetchedAt")
+    ) {
       this.set("isLoading", true);
 
-      AdminDashboardNext.find().then(adminDashboardNextModel => {
-        this.set("dashboardFetchedAt", new Date());
-        this.set("model", adminDashboardNextModel);
-      }).catch(e => {
-        this.get("exceptionController").set("thrown", e.jqXHR);
-        this.replaceRoute("exception");
-      }).finally(() => {
-        this.set("isLoading", false);
-      });
+      AdminDashboardNext.fetch()
+        .then(model => {
+          let properties = {
+            dashboardFetchedAt: new Date()
+          };
+
+          if (versionChecks) {
+            properties.versionCheck = VersionCheck.create(model.version_check);
+          }
+
+          this.setProperties(properties);
+        })
+        .catch(e => {
+          this.get("exceptionController").set("thrown", e.jqXHR);
+          this.replaceRoute("exception");
+        })
+        .finally(() => {
+          this.set("isLoading", false);
+        });
     }
   },
 
-  @computed("period")
-  startDate(period) {
-    switch (period) {
-      case "yearly":
-        return moment().subtract(1, "year").startOf("day");
-        break;
-      case "quarterly":
-        return moment().subtract(3, "month").startOf("day");
-        break;
-      case "weekly":
-        return moment().subtract(1, "week").startOf("day");
-        break;
-      case "monthly":
-        return moment().subtract(1, "month").startOf("day");
-        break;
-      case "daily":
-        return moment().startOf("day");
-        break;
-      default:
-        return null;
-    }
+  _loadProblems() {
+    this.setProperties({
+      loadingProblems: true,
+      problemsFetchedAt: new Date()
+    });
+
+    AdminDashboardNext.fetchProblems()
+      .then(model => this.set("problems", model.problems))
+      .finally(() => this.set("loadingProblems", false));
   },
 
-  @computed("period")
-  endDate(period) {
-    return period === "all" ? null : moment().endOf("day");
-  },
-
-  @computed("updated_at")
-  updatedTimestamp(updatedAt) {
-    return moment(updatedAt).format("LLL");
-  },
-
-  @computed("last_backup_taken_at")
-  backupTimestamp(lastBackupTakenAt) {
-    return moment(lastBackupTakenAt).format("LLL");
+  @computed("problemsFetchedAt")
+  problemsTimestamp(problemsFetchedAt) {
+    return moment(problemsFetchedAt)
+      .locale("en")
+      .format("LLL");
   },
 
   actions: {
-    changePeriod(period) {
-      DiscourseURL.routeTo(this._reportsForPeriodURL(period));
+    refreshProblems() {
+      this._loadProblems();
     }
-  },
-
-  _reportsForPeriodURL(period) {
-    return `/admin/dashboard-next?period=${period}`;
   }
 });

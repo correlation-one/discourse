@@ -21,7 +21,7 @@ describe Group do
       end
     end
 
-    describe '#username' do
+    describe '#name' do
       context 'when a user with a similar name exists' do
         it 'should not be valid' do
           new_group = Fabricate.build(:group, name: admin.username.upcase)
@@ -194,70 +194,30 @@ describe Group do
     Group[:staff].user_ids.reject { |id| id < 0 }
   end
 
-  it "Correctly handles primary groups" do
-    group = Fabricate(:group, primary_group: true)
-    user = Fabricate(:user)
+  describe '#primary_group=' do
+    it "updates all members' #primary_group" do
+      group.add(user)
 
-    group.add(user)
-
-    user.reload
-    expect(user.primary_group_id).to eq group.id
-
-    group.remove(user)
-
-    user.reload
-    expect(user.primary_group_id).to eq nil
-
-    group.add(user)
-    group.primary_group = false
-    group.save
-
-    user.reload
-    expect(user.primary_group_id).to eq nil
-
+      expect { group.update(primary_group: true) }.to change { user.reload.primary_group }.from(nil).to(group)
+      expect { group.update(primary_group: false) }.to change { user.reload.primary_group }.from(group).to(nil)
+    end
   end
 
-  it "Correctly handles title" do
+  describe '#title=' do
+    it "updates the member's title only if it was blank or exact match" do
+      group.add(user)
 
-    group = Fabricate(:group, title: 'Super Awesome')
-    user = Fabricate(:user)
+      expect { group.update(title: 'Awesome') }.to change { user.reload.title }.from(nil).to('Awesome')
+      expect { group.update(title: 'Super') }.to change { user.reload.title }.from('Awesome').to('Super')
 
-    expect(user.title).to eq nil
+      user.update(title: 'Differently Awesome')
+      expect { group.update(title: 'Awesome') }.to_not change { user.reload.title }
+    end
 
-    group.add(user)
-    user.reload
-
-    expect(user.title).to eq 'Super Awesome'
-
-    group.title = 'BOOM'
-    group.save
-
-    user.reload
-    expect(user.title).to eq 'BOOM'
-
-    group.title = nil
-    group.save
-
-    user.reload
-    expect(user.title).to eq nil
-
-    group.title = "BOB"
-    group.save
-
-    user.reload
-    expect(user.title).to eq "BOB"
-
-    group.remove(user)
-
-    user.reload
-    expect(user.title).to eq nil
-
-    group.add(user)
-    group.destroy
-
-    user.reload
-    expect(user.title).to eq nil
-
+    it "doesn't update non-member's title" do
+      user.update(title: group.title)
+      expect { group.update(title: 'Super') }.to_not change { user.reload.title }
+    end
   end
 
   describe '.refresh_automatic_group!' do
@@ -315,7 +275,7 @@ describe Group do
         default_locale = SiteSetting.default_locale
         I18n.locale = SiteSetting.default_locale = 'de'
 
-        another_group = Fabricate(:group,
+        _another_group = Fabricate(:group,
           name: I18n.t('groups.default_names.staff').upcase
         )
 
@@ -380,6 +340,17 @@ describe Group do
     admin.revoke_moderation!
     expect(real_admins).to be_empty
     expect(real_staff).to eq []
+
+    # we need some ninja work to set min username to 6
+
+    User.where('length(username) < 6').each do |u|
+      u.username = u.username + "ZZZZZZ"
+      u.save!
+    end
+
+    SiteSetting.min_username_length = 6
+    Group.refresh_automatic_groups!(:staff)
+    # should not explode here
   end
 
   it "Correctly updates automatic trust level groups" do
@@ -406,7 +377,7 @@ describe Group do
     user = Fabricate(:user)
     user.change_trust_level!(TrustLevel[2])
 
-    Group.exec_sql("UPDATE groups SET user_count = 0 WHERE id = #{Group::AUTO_GROUPS[:trust_level_2]}")
+    DB.exec("UPDATE groups SET user_count = 0 WHERE id = #{Group::AUTO_GROUPS[:trust_level_2]}")
 
     Group.refresh_automatic_groups!
 
@@ -482,6 +453,29 @@ describe Group do
 
       expect(event[:event_name]).to eq(:group_destroyed)
       expect(event[:params].first).to eq(group)
+    end
+
+    it "strips the user's title and unsets the user's primary group when exact match" do
+      group.update(title: 'Awesome')
+      user.update(primary_group: group)
+
+      group.destroy!
+
+      user.reload
+      expect(user.title).to eq(nil)
+      expect(user.primary_group).to eq(nil)
+    end
+
+    it "does not strip title or unset primary group when not exact match" do
+      primary_group = Fabricate(:group, primary_group: true, title: 'Different')
+      primary_group.add(user)
+      group.update(title: 'Awesome')
+
+      group.destroy!
+
+      user.reload
+      expect(user.title).to eq('Different')
+      expect(user.primary_group).to eq(primary_group)
     end
   end
 
@@ -678,14 +672,49 @@ describe Group do
 
   end
 
+  describe '#remove' do
+    before { group.add(user) }
+
+    it "only strips user's title if exact match" do
+      group.update(title: 'Awesome')
+      expect { group.remove(user) }.to change { user.reload.title }.from('Awesome').to(nil)
+
+      group.add(user)
+      user.update_columns(title: 'Different')
+      expect { group.remove(user) }.to_not change { user.reload.title }
+    end
+
+    it "unsets the user's primary group" do
+      user.update(primary_group: group)
+      expect { group.remove(user) }.to change { user.reload.primary_group }.from(group).to(nil)
+    end
+  end
+
   describe '#add' do
+    it 'grants the title only if the new member does not have title' do
+      group.update(title: 'Awesome')
+      expect { group.add(user) }.to change { user.reload.title }.from(nil).to('Awesome')
+
+      group.remove(user)
+      user.update(title: 'Already Awesome')
+      expect { group.add(user) }.not_to change { user.reload.title }
+    end
+
+    it "always sets user's primary group" do
+      group.update(primary_group: true)
+      expect { group.add(user) }.to change { user.reload.primary_group }.from(nil).to(group)
+
+      new_group = Fabricate(:group, primary_group: true)
+      expect { new_group.add(user) }.to change { user.reload.primary_group }.from(group).to(new_group)
+    end
+
     context 'when adding a user into a public group' do
       let(:category) { Fabricate(:category) }
 
       it "should publish the group's categories to the client" do
         group.update!(public_admission: true, categories: [category])
 
-        message = MessageBus.track_publish { group.add(user) }.first
+        message = MessageBus.track_publish("/categories") { group.add(user) }.first
 
         expect(message.data[:categories].count).to eq(1)
         expect(message.data[:categories].first[:id]).to eq(category.id)

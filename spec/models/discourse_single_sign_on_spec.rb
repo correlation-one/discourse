@@ -2,12 +2,13 @@ require "rails_helper"
 
 describe DiscourseSingleSignOn do
   before do
-    @sso_url = "http://somesite.com/discourse_sso"
+    @sso_url = "http://example.com/discourse_sso"
     @sso_secret = "shjkfdhsfkjh"
 
     SiteSetting.sso_url = @sso_url
     SiteSetting.enable_sso = true
     SiteSetting.sso_secret = @sso_secret
+    SiteSetting.queue_jobs = false
   end
 
   def make_sso
@@ -29,6 +30,7 @@ describe DiscourseSingleSignOn do
     sso.title = "user title"
     sso.custom_fields["a"] = "Aa"
     sso.custom_fields["b.b"] = "B.b"
+    sso.website = "https://www.discourse.org/"
     sso
   end
 
@@ -48,6 +50,7 @@ describe DiscourseSingleSignOn do
     expect(parsed.title).to eq sso.title
     expect(parsed.custom_fields["a"]).to eq "Aa"
     expect(parsed.custom_fields["b.b"]).to eq "B.b"
+    expect(parsed.website).to eq sso.website
   end
 
   it "can do round trip parsing correctly" do
@@ -324,6 +327,36 @@ describe DiscourseSingleSignOn do
     expect(sso.nonce).to_not be_nil
   end
 
+  context 'user locale' do
+    it 'sets default user locale if specified' do
+      SiteSetting.allow_user_locale = true
+
+      sso = DiscourseSingleSignOn.new
+      sso.username = "test"
+      sso.name = "test"
+      sso.email = "test@test.com"
+      sso.external_id = "123"
+      sso.locale = "es"
+
+      user = sso.lookup_or_create_user(ip_address)
+
+      expect(user.locale).to eq("es")
+
+      user.update_column(:locale, "he")
+
+      user = sso.lookup_or_create_user(ip_address)
+      expect(user.locale).to eq("he")
+
+      sso.locale_force_update = true
+      user = sso.lookup_or_create_user(ip_address)
+      expect(user.locale).to eq("es")
+
+      sso.locale = "fake"
+      user = sso.lookup_or_create_user(ip_address)
+      expect(user.locale).to eq("es")
+    end
+  end
+
   context 'trusting emails' do
     let(:sso) do
       sso = DiscourseSingleSignOn.new
@@ -344,6 +377,15 @@ describe DiscourseSingleSignOn do
       sso.require_activation = true
       user = sso.lookup_or_create_user(ip_address)
       expect(user.active).to eq(false)
+
+      user.activate
+
+      sso.external_id = "B"
+
+      expect do
+        sso.lookup_or_create_user(ip_address)
+      end.to raise_error(ActiveRecord::RecordInvalid)
+
     end
 
     it 'does not deactivate user if email provided is capitalized' do
@@ -584,4 +626,167 @@ describe DiscourseSingleSignOn do
       end
     end
   end
+
+  context 'when sso_overrides_profile_background is not enabled' do
+
+    it "correctly handles provided profile_background_urls" do
+      sso = DiscourseSingleSignOn.new
+      sso.external_id = 666
+      sso.email = "sam@sam.com"
+      sso.name = "sam"
+      sso.username = "sam"
+      sso.profile_background_url = "http://awesome.com/image.png"
+      sso.suppress_welcome_message = true
+
+      FileHelper.stubs(:download).returns(file_from_fixtures("logo.png"))
+      user = sso.lookup_or_create_user(ip_address)
+      user.reload
+      user.user_profile.reload
+      profile_background = user.user_profile.profile_background
+
+      # initial creation ...
+      expect(profile_background).to_not eq(nil)
+      expect(profile_background).to_not eq('')
+
+      FileHelper.stubs(:download) { raise "should not be called" }
+      sso.profile_background_url = "https://some.new/avatar.png"
+      user = sso.lookup_or_create_user(ip_address)
+      user.reload
+      user.user_profile.reload
+
+      # profile_background updated but no override specified ...
+      expect(user.user_profile.profile_background).to eq(profile_background)
+    end
+  end
+
+  context 'when sso_overrides_profile_background is enabled' do
+    let!(:sso_record) { Fabricate(:single_sign_on_record, external_profile_background_url: "http://example.com/an_image.png") }
+
+    let!(:sso) {
+      sso = DiscourseSingleSignOn.new
+      sso.username = "test"
+      sso.name = "test"
+      sso.email = sso_record.user.email
+      sso.external_id = sso_record.external_id
+      sso
+    }
+
+    let(:logo) { file_from_fixtures("logo.png") }
+
+    before do
+      SiteSetting.sso_overrides_profile_background = true
+    end
+
+    it "deal with no profile_background_url passed for an existing user with a profile_background" do
+      Sidekiq::Testing.inline! do
+        # Deliberately not setting profile_background_url so it should not update
+        sso_record.user.user_profile.update_columns(profile_background: '')
+        user = sso.lookup_or_create_user(ip_address)
+        user.reload
+        user.user_profile.reload
+
+        expect(user).to_not be_nil
+        expect(user.user_profile.profile_background).to eq('')
+      end
+    end
+
+    it "deal with a profile_background_url passed for an existing user with a profile_background" do
+      Sidekiq::Testing.inline! do
+        FileHelper.stubs(:download).returns(logo)
+
+        sso_record.user.user_profile.update_columns(profile_background: '')
+
+        sso.profile_background_url = "http://example.com/a_different_image.png"
+
+        user = sso.lookup_or_create_user(ip_address)
+        user.reload
+        user.user_profile.reload
+
+        expect(user).to_not be_nil
+        expect(user.user_profile.profile_background).to_not eq('')
+      end
+    end
+  end
+
+  context 'when sso_overrides_card_background is not enabled' do
+
+    it "correctly handles provided card_background_urls" do
+      sso = DiscourseSingleSignOn.new
+      sso.external_id = 666
+      sso.email = "sam@sam.com"
+      sso.name = "sam"
+      sso.username = "sam"
+      sso.card_background_url = "http://awesome.com/image.png"
+      sso.suppress_welcome_message = true
+
+      FileHelper.stubs(:download).returns(file_from_fixtures("logo.png"))
+      user = sso.lookup_or_create_user(ip_address)
+      user.reload
+      user.user_profile.reload
+      card_background = user.user_profile.card_background
+
+      # initial creation ...
+      expect(card_background).to_not eq(nil)
+      expect(card_background).to_not eq('')
+
+      FileHelper.stubs(:download) { raise "should not be called" }
+      sso.card_background_url = "https://some.new/avatar.png"
+      user = sso.lookup_or_create_user(ip_address)
+      user.reload
+      user.user_profile.reload
+
+      # card_background updated but no override specified ...
+      expect(user.user_profile.card_background).to eq(card_background)
+    end
+  end
+
+  context 'when sso_overrides_card_background is enabled' do
+    let!(:sso_record) { Fabricate(:single_sign_on_record, external_card_background_url: "http://example.com/an_image.png") }
+
+    let!(:sso) {
+      sso = DiscourseSingleSignOn.new
+      sso.username = "test"
+      sso.name = "test"
+      sso.email = sso_record.user.email
+      sso.external_id = sso_record.external_id
+      sso
+    }
+
+    let(:logo) { file_from_fixtures("logo.png") }
+
+    before do
+      SiteSetting.sso_overrides_card_background = true
+    end
+
+    it "deal with no card_background_url passed for an existing user with a card_background" do
+      Sidekiq::Testing.inline! do
+        # Deliberately not setting card_background_url so it should not update
+        sso_record.user.user_profile.update_columns(card_background: '')
+        user = sso.lookup_or_create_user(ip_address)
+        user.reload
+        user.user_profile.reload
+
+        expect(user).to_not be_nil
+        expect(user.user_profile.card_background).to eq('')
+      end
+    end
+
+    it "deal with a card_background_url passed for an existing user with a card_background_url" do
+      Sidekiq::Testing.inline! do
+        FileHelper.stubs(:download).returns(logo)
+
+        sso_record.user.user_profile.update_columns(card_background: '')
+
+        sso.card_background_url = "http://example.com/a_different_image.png"
+
+        user = sso.lookup_or_create_user(ip_address)
+        user.reload
+        user.user_profile.reload
+
+        expect(user).to_not be_nil
+        expect(user.user_profile.card_background).to_not eq('')
+      end
+    end
+  end
+
 end

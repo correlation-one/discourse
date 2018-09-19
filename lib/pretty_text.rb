@@ -82,6 +82,8 @@ module PrettyText
     ctx_load_manifest(ctx, "markdown-it-bundle.js")
     root_path = "#{Rails.root}/app/assets/javascripts/"
 
+    apply_es6_file(ctx, root_path, "discourse/helpers/parse-html")
+    apply_es6_file(ctx, root_path, "discourse/lib/to-markdown")
     apply_es6_file(ctx, root_path, "discourse/lib/utilities")
 
     PrettyText::Helpers.instance_methods.each do |method|
@@ -140,25 +142,13 @@ module PrettyText
     protect do
       context = v8
 
-      paths = {
-        baseUri: Discourse::base_uri,
-        CDN: Rails.configuration.action_controller.asset_host,
-      }
-
-      if SiteSetting.Upload.enable_s3_uploads
-        if SiteSetting.Upload.s3_cdn_url.present?
-          paths[:S3CDN] = SiteSetting.Upload.s3_cdn_url
-        end
-        paths[:S3BaseUrl] = Discourse.store.absolute_base_url
-      end
-
       custom_emoji = {}
       Emoji.custom.map { |e| custom_emoji[e.name] = e.url }
 
       buffer = <<~JS
         __optInput = {};
         __optInput.siteSettings = #{SiteSetting.client_settings_json};
-        __paths = #{paths.to_json};
+        __paths = #{paths_json};
         __optInput.getURL = __getURL;
         __optInput.getCurrentUser = __getCurrentUser;
         __optInput.lookupAvatar = __lookupAvatar;
@@ -180,6 +170,10 @@ module PrettyText
 
       if opts[:user_id]
         buffer << "__optInput.userId = #{opts[:user_id].to_i};\n"
+      end
+
+      if opts[:invalidate_oneboxes]
+        buffer << "__optInput.invalidateOneboxes = true;\n"
       end
 
       buffer << "__textOptions = __buildOptions(__optInput);\n"
@@ -213,10 +207,29 @@ module PrettyText
     baked
   end
 
+  def self.paths_json
+    paths = {
+      baseUri: Discourse::base_uri,
+      CDN: Rails.configuration.action_controller.asset_host,
+    }
+
+    if SiteSetting.Upload.enable_s3_uploads
+      if SiteSetting.Upload.s3_cdn_url.present?
+        paths[:S3CDN] = SiteSetting.Upload.s3_cdn_url
+      end
+      paths[:S3BaseUrl] = Discourse.store.absolute_base_url
+    end
+
+    paths.to_json
+  end
+
   # leaving this here, cause it invokes v8, don't want to implement twice
   def self.avatar_img(avatar_template, size)
     protect do
-      v8.eval("__utils.avatarImg({size: #{size.inspect}, avatarTemplate: #{avatar_template.inspect}}, __getURL);")
+      v8.eval(<<~JS)
+        __paths = #{paths_json};
+        __utils.avatarImg({size: #{size.inspect}, avatarTemplate: #{avatar_template.inspect}}, __getURL);
+      JS
     end
   end
 
@@ -225,7 +238,10 @@ module PrettyText
 
     set = SiteSetting.emoji_set.inspect
     protect do
-      v8.eval("__performEmojiUnescape(#{title.inspect}, { getURL: __getURL, emojiSet: #{set} })")
+      v8.eval(<<~JS)
+        __paths = #{paths_json};
+        __performEmojiUnescape(#{title.inspect}, { getURL: __getURL, emojiSet: #{set} });
+      JS
     end
   end
 
@@ -281,7 +297,7 @@ module PrettyText
         else
           l["rel"] = "nofollow noopener"
         end
-      rescue URI::InvalidURIError, URI::InvalidComponentError
+      rescue URI::Error
         # add a nofollow anyway
         l["rel"] = "nofollow noopener"
       end
@@ -341,29 +357,38 @@ module PrettyText
     fragment.to_html
   end
 
- # Given a Nokogiri doc, convert all links to absolute
- def self.make_all_links_absolute(doc)
-   site_uri = nil
-   doc.css("a").each do |link|
-     href = link["href"].to_s
-     begin
-       uri = URI(href)
-       site_uri ||= URI(Discourse.base_url)
-       link["href"] = "#{site_uri}#{link['href']}" unless uri.host.present?
-     rescue URI::InvalidURIError, URI::InvalidComponentError
-       # leave it
-     end
-   end
- end
+  def self.make_all_links_absolute(doc)
+    site_uri = nil
+    doc.css("a").each do |link|
+      href = link["href"].to_s
+      begin
+        uri = URI(href)
+        site_uri ||= URI(Discourse.base_url)
+        unless uri.host.present? || href.start_with?('mailto')
+          link["href"] = "#{site_uri}#{link['href']}"
+        end
+      rescue URI::Error
+        # leave it
+      end
+    end
+  end
 
   def self.strip_image_wrapping(doc)
     doc.css(".lightbox-wrapper .meta").remove
+  end
+
+  def self.convert_vimeo_iframes(doc)
+    doc.css("iframe[src*='player.vimeo.com']").each do |iframe|
+      vimeo_id = iframe['src'].split('/').last
+      iframe.replace "<p><a href='https://vimeo.com/#{vimeo_id}'>https://vimeo.com/#{vimeo_id}</a></p>"
+    end
   end
 
   def self.format_for_email(html, post = nil)
     doc = Nokogiri::HTML.fragment(html)
     DiscourseEvent.trigger(:reduce_cooked, doc, post)
     strip_image_wrapping(doc)
+    convert_vimeo_iframes(doc)
     make_all_links_absolute(doc)
     doc.to_html
   end

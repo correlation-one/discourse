@@ -63,7 +63,8 @@ class AdminUserIndexQuery
     if params[:stats].present? && params[:stats] == false
       klass.order(order.reject(&:blank?).join(","))
     else
-      klass.includes(:user_stat, :user_second_factor).order(order.reject(&:blank?).join(","))
+      klass.includes(:user_stat, :user_second_factors)
+        .order(order.reject(&:blank?).join(","))
     end
   end
 
@@ -98,6 +99,7 @@ class AdminUserIndexQuery
     when 'suspended'  then @query.suspended
     when 'pending'    then @query.not_suspended.where(approved: false, active: true)
     when 'suspect'    then suspect_users
+    when 'staged'     then @query.where(staged: true)
     end
   end
 
