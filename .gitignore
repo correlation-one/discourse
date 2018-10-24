@@ -56,6 +56,7 @@ bootsnap-compile-cache/
 !/plugins/discourse-local-dates
 !/plugins/discourse-ratings/
 !/plugins/discourse-math/
+!/plugins/discourse-correlation-one-package
 /plugins/*/auto_generated/
 
 
@@ -126,3 +127,4 @@ vendor/bundle/*
 # ignore nodejs files
 /node_modules
 /package-lock.json
+

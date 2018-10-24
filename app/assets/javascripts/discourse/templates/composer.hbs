@@ -167,30 +167,31 @@
             </div>
           </div>
         </div>
-
       {{else}}
-        <div class='saving-text'>
-          {{#if model.createdPost}}
-            {{i18n 'composer.saved'}} <a class='permalink' href="{{unbound createdPost.url}}" {{action "viewNewReply"}}>{{i18n 'composer.view_new_post'}}</a>
-          {{else}}
-            {{i18n 'composer.saving'}} {{loading-spinner size="small"}}
-          {{/if}}
-        </div>
 
-        <div class='draft-text'>
-          {{#if model.topic}}
-            {{d-icon "mail-forward"}} {{{draftTitle}}}
-          {{else}}
-            {{i18n "composer.saved_draft"}}
-          {{/if}}
-        </div>
+          <div class='saving-text'>
+            {{#if model.createdPost}}
+              {{i18n 'composer.saved'}} <a class='permalink' href="{{unbound createdPost.url}}" {{action "viewNewReply"}}>{{i18n 'composer.view_new_post'}}</a>
+            {{else}}
+              {{i18n 'composer.saving'}} {{loading-spinner size="small"}}
+            {{/if}}
+          </div>
 
-        {{composer-toggles composeState=model.composeState
-          toggleComposer=(action "toggle")
-          toggleToolbar=(action "toggleToolbar")}}
+          <div class='draft-text'>
+            {{#if model.topic}}
+              {{d-icon "mail-forward"}} {{{draftTitle}}}
+            {{else}}
+              {{i18n "composer.saved_draft"}}
+            {{/if}}
+          </div>
+
+          {{composer-toggles composeState=model.composeState
+            toggleComposer=(action "toggle")
+            toggleToolbar=(action "toggleToolbar")}}
 
       {{/if}}
 
   {{/if}}
+  {{plugin-outlet name="minimized-composer"}}
 
 {{/composer-body}}
