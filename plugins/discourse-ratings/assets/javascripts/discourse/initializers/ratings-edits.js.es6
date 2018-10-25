@@ -25,16 +25,27 @@ export default {
       });
 
       api.modifyClass('model:composer', {
-        includeRating: true,
+        includeRating: false,
         includeRatingTargetId: false,
         ratingTargetId: undefined,
 
         @on('init')
-        @observes('post')
+        @observes('post', 'ratingEnabled')
         setRating() {
           const post = this.get('post');
-          if (this.get('editingPost') && post && post.rating) {
-            this.set('rating', post.rating);
+          const editing = this.get('editingPost');
+          const creating = this.get('creatingTopic');
+          const enabled = this.get('ratingEnabled');
+
+          if (editing && post && post.rating) {
+            this.setProperties({
+              rating: post.rating,
+              includeRating: true
+            });
+          }
+
+          if (enabled && creating) {
+            this.set('includeRating', true);
           }
         },
 
@@ -86,12 +97,16 @@ export default {
               return bootbox.alert(I18n.t("composer.select_rating"));
             }
 
-            this.save().then(() => {
-              if (showRating && includeRating && rating) {
-                const controller = this.get('topicController');
-                controller.toggleCanRate();
-              }
-            });
+            let result = this.save();
+
+            if (result) {
+              Promise.resolve(result).then(() => {
+                if (showRating && includeRating && rating) {
+                  const controller = this.get('topicController');
+                  controller.toggleCanRate();
+                }
+              });
+            };
           }
         },
 
@@ -102,15 +117,19 @@ export default {
              || this.get('model.action') !== Composer.EDIT
              || this.get('model.composeState') !== Composer.SAVING) { return; }
 
-          const post = this.get('model.post');
           const rating = this.get('model.rating');
 
-          if (rating && !this.get('model.includeRating')) {
-           removeRating(post.id);
-           const controller = this.get('topicController');
-           controller.toggleCanRate();
-          } else {
-           editRating(post.id, rating);
+          if (rating) {
+            const post = this.get('model.post');
+            const includeRating = this.get('model.includeRating');
+
+            if (includeRating) {
+              editRating(post.id, rating);
+            } else {
+              removeRating(post.id);
+              const controller = this.get('topicController');
+              controller.toggleCanRate();
+            }
           }
         }
       });

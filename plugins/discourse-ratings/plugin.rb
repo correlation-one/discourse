@@ -89,7 +89,9 @@ after_initialize do
   require 'topic'
   class ::Topic
     def average_rating
-      self.custom_fields["average_rating"].to_f
+      if average = self.custom_fields["average_rating"]
+        average.is_a?(Array) ? average[0].to_f : average.to_f
+      end
     end
 
     def rating_enabled?
@@ -100,8 +102,8 @@ after_initialize do
     end
 
     def rating_count
-      if self.custom_fields['rating_count']
-        self.custom_fields['rating_count'].to_i
+      if count = self.custom_fields['rating_count']
+        count.is_a?(Array) ? count[0].to_i : count.to_i
       else
         ## 'mirgration' - to be removed
         if rating_enabled? && average_rating.present?
@@ -191,6 +193,14 @@ after_initialize do
     def list_ratings
       create_list(:ratings, ascending: 'true') do |topics|
         topics.where(subtype: 'rating')
+      end
+    end
+
+    def list_top_ratings
+      create_list(:top_ratings, unordered: true) do |topics|
+        topics.where(subtype: 'rating')
+          .joins("left join topic_custom_fields tfv ON tfv.topic_id = topics.id AND tfv.name = 'average_rating'")
+          .order("coalesce(tfv.value,'0')::float desc, topics.bumped_at desc")
       end
     end
   end

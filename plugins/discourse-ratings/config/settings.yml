@@ -3,8 +3,8 @@ plugins:
     default: true
     client: true
   rating_show_exact_average:
-    default: false
-    client: false
+    default: true
+    client: true
   rating_show_count:
     default: false
     client: true

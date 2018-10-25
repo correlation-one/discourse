@@ -3,9 +3,15 @@
     {{#if model.rating_enabled}}
       {{#if model.has_ratings}}
         {{star-rating-raw model.average_rating}}
-        {{#if this.siteSettings.rating_show_exact_average}}
+        {{#if siteSettings.rating_show_exact_average}}
           <span class="exact-rating">
-            {{average-rating model.average_rating count=model.rating_count}}
+            ({{model.average_rating}})
+          </span>
+        {{/if}}
+        {{#if siteSettings.rating_show_count}}
+          <span class="rating-count">
+            {{model.rating_count}}
+            {{i18n 'topic.x_rating_count' count=model.rating_count}}
           </span>
         {{/if}}
       {{else}}
@@ -21,12 +27,5 @@
   </div>
 {{/if}}
 {{#if model.showRatingTip}}
-  <div class="topic-tip">
-    {{d-button class="btn btn-small" action="toggleDetails" label="topic.tip.ratings.title" icon="info"}}
-    {{#if showDetails}}
-      <div class="tip-details">
-        {{{i18n 'topic.tip.ratings.details'}}}
-      </div>
-    {{/if}}
-  </div>
+  {{topic-tip label='topic.tip.ratings.title' details='topic.tip.ratings.details'}}
 {{/if}}

@@ -2,10 +2,9 @@
   margin-left: 2px;
 }
 
-.exact-rating {
+.exact-rating, .rating-count {
   vertical-align: middle;
   display: inline-block;
-  height: 17px;
   color: #777;
   margin-left: 2px;
 }
@@ -31,6 +30,7 @@
 
   .tip-details {
     background-color: dark-light-diff($primary, $secondary, 95%, -85%);
+    box-shadow: shadow('dropdown');
     padding: 10px 15px;
     position: absolute;
     top: 22px;
@@ -54,10 +54,10 @@
 
 .topic-post .star-rating {
   vertical-align: top;
-  opacity: 0;
 }
 
 span.star-rating {
+  margin-bottom: 2px;
   vertical-align: middle;
   font-size: 0;
   padding: 0;
