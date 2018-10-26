@@ -1,0 +1,4 @@
+plugins:
+  discourse_correlation_one_package_enabled:
+    default: true
+    client: true
