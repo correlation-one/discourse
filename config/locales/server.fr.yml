@@ -2058,7 +2058,7 @@ fr:
       text_body_template: |
         Salut ! Nous avons vu que vous lisez beaucoup, ce qui est super, alors nous vous avons monté d'un [niveau de confiance !](https://blog.discourse.org/2018/06/understanding-discourse-trust-levels/)
 
-        Nous sommes ravis que vous passez du temps avec nous, et on adorerez en savoir plus sur vous. Prenez un moment pour [remplir votre profil](/my/preferences/profile), ou sentez-vous libre de [démarrer un nouveau sujet](/categories).
+        Nous sommes ravis que vous passez du temps avec nous, et on adorerait en savoir plus sur vous. Prenez un moment pour [remplir votre profil](/my/preferences/profile), ou sentez-vous libre de [démarrer un nouveau sujet](/categories).
     welcome_invite:
       title: "Bienvenue invité"
       subject_template: "Bienvenue sur %{site_name} !"
